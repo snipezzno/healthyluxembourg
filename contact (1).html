@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Contact Us | Healthy Luxembourg</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      html, body { font-family: Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, "Helvetica Neue", Arial; }
+      .bg-scene {
+        background:
+          radial-gradient(90rem 48rem at 18% 30%, rgba(140,198,63,0.3), transparent 55%),
+          radial-gradient(70rem 38rem at 80% 20%, rgba(27,117,187,0.22), transparent 50%),
+          radial-gradient(55rem 32rem at 72% 78%, rgba(27,117,187,0.18), transparent 55%),
+          linear-gradient(180deg, #0b1512 0%, #060b0d 100%);
+      }
+    </style>
+  </head>
+  <body class="min-h-screen bg-[#07130f] text-gray-100">
+    <div class="fixed inset-0 -z-10 bg-scene"></div>
+    <div class="fixed inset-0 -z-10 pointer-events-none shadow-[inset_0_0_240px_100px_rgba(0,0,0,0.35)]"></div>
+
+    <div class="max-w-4xl mx-auto px-6 py-10 space-y-10">
+      <header class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <a href="preview (1).html" class="inline-flex items-center gap-3 text-white hover:text-white/80 transition">
+          <img src="https://i.imgur.com/eKs0Yrj.png" alt="Healthy Luxembourg logo" class="h-12 w-auto" />
+          <div class="text-left">
+            <div class="text-xs uppercase tracking-[0.35em] text-[#8cc63f]">Healthy Luxembourg</div>
+            <div class="text-lg font-semibold">Contact Us</div>
+          </div>
+        </a>
+        <a href="preview (1).html" class="text-sm text-white/70 underline underline-offset-4 hover:text-white transition">
+          Back to homepage
+        </a>
+      </header>
+
+      <main class="space-y-6">
+        <div>
+          <h1 class="text-3xl font-semibold text-white">Contact Us</h1>
+          <p class="mt-2 text-sm text-white/70">Reach out with partnership inquiries or questions and we’ll get back to you.</p>
+        </div>
+
+        <form
+          class="grid gap-4 rounded-2xl border border-white/10 bg-black/20 p-6 shadow-[0_20px_45px_rgba(7,20,16,0.35)]"
+          action="https://formsubmit.co/healthyluxembourg.contact@gmail.com"
+          method="POST"
+        >
+          <input type="hidden" name="_subject" value="Partner inquiry - Healthy Luxembourg" />
+          <input type="hidden" name="_captcha" value="false" />
+          <input type="hidden" name="_template" value="table" />
+          <input type="hidden" name="_next" value="preview (1).html" />
+          <div class="grid gap-2">
+            <label class="text-sm uppercase tracking-wide text-white/70" for="name">Name &amp; Surname</label>
+            <input id="name" name="name" type="text" required class="rounded-lg border border-white/15 bg-black/30 px-4 py-2.5 text-gray-100 focus:border-[#8cc63f] focus:outline-none" placeholder="Your full name" />
+          </div>
+          <div class="grid gap-2">
+            <label class="text-sm uppercase tracking-wide text-white/70" for="email">Email address</label>
+            <input id="email" name="email" type="email" required class="rounded-lg border border-white/15 bg-black/30 px-4 py-2.5 text-gray-100 focus:border-[#8cc63f] focus:outline-none" placeholder="you@example.com" />
+          </div>
+          <div class="grid gap-2">
+            <label class="text-sm uppercase tracking-wide text-white/70" for="business">Name of business</label>
+            <input id="business" name="business" type="text" required class="rounded-lg border border-white/15 bg-black/30 px-4 py-2.5 text-gray-100 focus:border-[#8cc63f] focus:outline-none" placeholder="Business name" />
+          </div>
+          <div class="grid gap-2">
+            <label class="text-sm uppercase tracking-wide text-white/70" for="phone">Phone number</label>
+            <input id="phone" name="phone" type="tel" class="rounded-lg border border-white/15 bg-black/30 px-4 py-2.5 text-gray-100 focus:border-[#8cc63f] focus:outline-none" placeholder="+352 ..." />
+          </div>
+          <div class="grid gap-2">
+            <label class="text-sm uppercase tracking-wide text-white/70" for="message">Message</label>
+            <textarea id="message" name="message" rows="4" class="rounded-lg border border-white/15 bg-black/30 px-4 py-2.5 text-gray-100 focus:border-[#8cc63f] focus:outline-none" placeholder="How can we help?"></textarea>
+          </div>
+          <div class="flex flex-wrap items-center gap-3">
+            <button type="submit" class="inline-flex items-center justify-center rounded-full bg-gradient-to-r from-[#8cc63f] via-[#58b0d8] to-[#1b75bb] px-6 py-2.5 text-sm font-semibold text-[#04120c] shadow-[0_15px_35px_rgba(18,85,118,0.35)] transition hover:scale-[1.02]">
+              Send
+            </button>
+            <p class="text-sm text-white/70">We’ll receive your details instantly.</p>
+          </div>
+        </form>
+      </main>
+    </div>
+  </body>
+</html>

@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Partners | Healthy Luxembourg</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      html, body { font-family: Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, "Helvetica Neue", Arial; }
+      .bg-scene {
+        background:
+          radial-gradient(90rem 48rem at 18% 30%, rgba(140,198,63,0.3), transparent 55%),
+          radial-gradient(70rem 38rem at 80% 20%, rgba(27,117,187,0.22), transparent 50%),
+          radial-gradient(55rem 32rem at 72% 78%, rgba(27,117,187,0.18), transparent 55%),
+          linear-gradient(180deg, #0b1512 0%, #060b0d 100%);
+      }
+    </style>
+  </head>
+  <body class="min-h-screen bg-[#07130f] text-gray-100">
+    <div class="fixed inset-0 -z-10 bg-scene"></div>
+    <div class="fixed inset-0 -z-10 pointer-events-none opacity-60">
+      <svg viewBox="0 0 100 100" class="absolute text-[#8cc63f] opacity-20" style="left:8%; top:18%; width:180px; height:180px" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="6" y="34" width="22" height="32" rx="5" />
+        <rect x="72" y="34" width="22" height="32" rx="5" />
+        <line x1="28" y1="50" x2="72" y2="50" />
+        <line x1="30" y1="40" x2="70" y2="40" />
+        <line x1="30" y1="60" x2="70" y2="60" />
+      </svg>
+      <svg viewBox="0 0 100 100" class="absolute text-[#1b75bb] opacity-16" style="right:8%; top:24%; width:200px; height:200px" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M50 78 L25 55 C15 42 22 28 35 28 C43 28 50 35 50 35 C50 35 57 28 65 28 C78 28 85 42 75 55 Z" />
+      </svg>
+    </div>
+    <div class="fixed inset-0 -z-10 pointer-events-none shadow-[inset_0_0_240px_100px_rgba(0,0,0,0.35)]"></div>
+
+    <div class="max-w-6xl mx-auto px-6 py-10">
+      <header class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <a href="preview (1).html" class="inline-flex items-center gap-3 text-white hover:text-white/80 transition">
+          <img src="https://i.imgur.com/eKs0Yrj.png" alt="Healthy Luxembourg logo" class="h-12 w-auto" />
+          <div class="text-left">
+            <div class="text-xs uppercase tracking-[0.35em] text-[#8cc63f]">Healthy Luxembourg</div>
+            <div class="text-lg font-semibold">Partner Directory</div>
+          </div>
+        </a>
+        <a href="preview (1).html" class="text-sm text-white/70 underline underline-offset-4 hover:text-white transition">
+          Back to homepage
+        </a>
+      </header>
+
+      <main class="mt-10 space-y-8">
+        <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h1 class="text-3xl font-semibold text-white">Partners</h1>
+            <p class="text-sm text-white/70">Browse our featured partner network.</p>
+          </div>
+          <div class="w-full max-w-sm">
+            <input
+              id="search"
+              type="text"
+              placeholder="Search partners"
+              class="w-full rounded-xl border border-white/15 bg-black/30 px-4 py-2.5 text-sm text-gray-100 placeholder:text-white/40 focus:border-[#8cc63f] focus:outline-none"
+            />
+          </div>
+        </div>
+
+        <div id="partner-list" class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-2"></div>
+      </main>
+    </div>
+
+    <script>
+      const partners = [
+        { name: 'Factory 4', icon: 'dumbbell', color: '#8CC63F', discount: '15% off membership', hours: 'Daily 06:00-22:00', desc: 'Boutique training gym with strength, conditioning, and small-group coaching.' },
+        { name: 'Elysium', icon: 'lotus', color: '#1B75BB', discount: '10% off classes', hours: 'Daily 07:00-21:00', desc: 'Premium wellness studio offering yoga, pilates, and recovery sessions.' },
+      ];
+
+      function icon(type, color) {
+        const common = `stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"`;
+        switch (type) {
+          case 'lotus':
+            return `<svg viewBox="0 0 100 100" class="w-11 h-11" fill="none" ${common} style="color:${color}"><path d="M50 78 C35 78, 22 72, 15 62 C25 62, 35 64, 42 68 C44 60, 47 54, 50 50 C53 54, 56 60, 58 68 C65 64, 75 62, 85 62 C78 72, 65 78, 50 78 Z" /><path d="M50 50 C46 46, 40 42, 34 41 C36 50, 40 58, 44 64" /><path d="M50 50 C54 46, 60 42, 66 41 C64 50, 60 58, 56 64" /></svg>`;
+          default:
+            return `<svg viewBox="0 0 100 100" class="w-11 h-11" fill="none" ${common} style="color:${color}"><rect x="6" y="34" width="22" height="32" rx="5" /><rect x="72" y="34" width="22" height="32" rx="5" /><line x1="28" y1="50" x2="72" y2="50" /><line x1="30" y1="40" x2="70" y2="40" /><line x1="30" y1="60" x2="70" y2="60" /></svg>`;
+        }
+      }
+
+      const listEl = document.getElementById('partner-list');
+      const searchEl = document.getElementById('search');
+
+      function render(list) {
+        listEl.innerHTML = list.map((partner) => `
+          <div class="relative overflow-hidden rounded-2xl border border-white/10 bg-[#0f1d18]/80 p-6 shadow-[0_20px_45px_rgba(7,20,16,0.4)]">
+            <div class="flex items-start gap-4">
+              <div class="flex h-12 w-12 items-center justify-center rounded-2xl border bg-white/5" style="border-color:${partner.color}55; background:linear-gradient(135deg, ${partner.color}1a 0%, rgba(9,22,18,0.8) 100%)">
+                ${icon(partner.icon, partner.color)}
+              </div>
+              <div class="min-w-0">
+                <h3 class="text-lg font-semibold text-white">${partner.name}</h3>
+                <p class="mt-2 text-sm text-gray-300">${partner.desc}</p>
+                <div class="mt-4 flex flex-wrap items-center gap-2 text-xs">
+                  <span class="inline-flex items-center rounded-full border px-3 py-1 font-medium" style="border-color:${partner.color}55; color:${partner.color}">${partner.discount}</span>
+                  <span class="inline-flex items-center rounded-full border border-white/15 bg-white/5 px-3 py-1 text-gray-300">${partner.hours}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        `).join('');
+      }
+
+      function handleSearch() {
+        const term = (searchEl.value || '').toLowerCase();
+        const filtered = partners.filter((p) =>
+          p.name.toLowerCase().includes(term) ||
+          p.desc.toLowerCase().includes(term) ||
+          p.discount.toLowerCase().includes(term)
+        );
+        render(filtered);
+      }
+
+      searchEl.addEventListener('input', handleSearch);
+      render(partners);
+    </script>
+  </body>
+</html>
