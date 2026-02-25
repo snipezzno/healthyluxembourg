@@ -39,6 +39,7 @@
         from { opacity: 0; transform: scale(0.95); }
         to { opacity: 1; transform: scale(1); }
       }
+    <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
     </style>
   </head>
   <body class="min-h-screen bg-[#07130f] text-gray-100 antialiased">
@@ -686,47 +687,34 @@
         };
 
         const sendWelcomeEmail = async (userName, userEmail) => {
-          try {
-            const formData = new FormData();
-            formData.append('name', userName);
-            formData.append('email', userEmail);
-            formData.append('_subject', 'Welcome to Healthy Luxembourg!');
-            formData.append('_template', 'table');
-            formData.append('_captcha', 'false');
-            
-            const message = `
-Welcome to Healthy Luxembourg, ${userName}!
+  try {
+    // Your EmailJS credentials (replace with your actual values)
+    const serviceId = 'YOUR_SERVICE_ID'; // From Step 2
+    const templateId = 'YOUR_TEMPLATE_ID'; // From Step 2
+    const publicKey = 'YOUR_PUBLIC_KEY'; // From Step 2
 
-We're thrilled to have you join our community!
+    // Template parameters matching your template variables [citation:7]
+    const templateParams = {
+      name: userName,
+      to_email: userEmail,
+      from_name: "Healthy Luxembourg",
+      reply_to: "healthyluxembourg.contact@gmail.com"
+    };
 
-With your Healthy Luxembourg membership, you now have access to exclusive discounts at:
-- Fitness centers across Luxembourg
-- Yoga & Pilates studios
-- Healthy food partners
-- Bio & Wellness shops
-
-Log in to your account to start saving!
-
-Questions? Contact us at healthyluxembourg.contact@gmail.com
-
-Best regards,
-The Healthy Luxembourg Team
-            `;
-            
-            formData.append('message', message);
-            formData.append('_next', 'https://formsubmit.co/send-x');
-            
-            const response = await fetch('https://formsubmit.co/ajax/healthyluxembourg.contact@gmail.com', {
-              method: 'POST',
-              body: formData
-            });
-            
-            const result = await response.json();
-            console.log('Welcome email result:', result);
-          } catch (error) {
-            console.warn('Failed to send welcome email:', error);
-          }
-        };
+    const response = await emailjs.send(
+      serviceId,
+      templateId,
+      templateParams,
+      publicKey
+    );
+    
+    console.log('Welcome email sent successfully!', response.status, response.text);
+    return true;
+  } catch (error) {
+    console.error('Failed to send welcome email:', error);
+    return false;
+  }
+};
 
         const handleAuthSubmit = async (mode, formData) => {
           setAuthError('');
@@ -1156,3 +1144,4 @@ The Healthy Luxembourg Team
     </script>
   </body>
 </html>
+
