@@ -27,10 +27,17 @@
         .bg-icons .icon { opacity: 0.08; transform: scale(0.5); }
         .vignette { box-shadow: inset 0 0 120px 50px rgba(0,0,0,0.35); }
       }
-      /* Improve touch targets on mobile */
       button, a { -webkit-tap-highlight-color: transparent; }
       @media (max-width: 768px) {
         button, a { min-height: 44px; min-width: 44px; }
+      }
+      /* Modal animations */
+      .modal-enter {
+        animation: modalFadeIn 0.2s ease-out;
+      }
+      @keyframes modalFadeIn {
+        from { opacity: 0; transform: scale(0.95); }
+        to { opacity: 1; transform: scale(1); }
       }
     </style>
   </head>
@@ -73,6 +80,185 @@
 
     <script type="text/babel">
       const { useState, useEffect } = React;
+
+      // Contact Form Modal Component
+      function ContactFormModal({ type, onClose }) {
+        const [formData, setFormData] = useState({
+          name: '',
+          email: '',
+          business: '',
+          phone: '',
+          message: ''
+        });
+        const [isSubmitting, setIsSubmitting] = useState(false);
+        const [submitStatus, setSubmitStatus] = useState(null);
+
+        const isPartnerForm = type === 'partner';
+        const title = isPartnerForm ? 'Become a Partner' : 'Contact Us';
+        const submitUrl = 'https://formsubmit.co/healthyluxembourg.contact@gmail.com';
+
+        const handleChange = (e) => {
+          const { name, value } = e.target;
+          setFormData(prev => ({ ...prev, [name]: value }));
+        };
+
+        const handleSubmit = async (e) => {
+          e.preventDefault();
+          setIsSubmitting(true);
+          
+          // Prepare form data for FormSubmit
+          const formElement = e.target;
+          const formData = new FormData(formElement);
+          
+          try {
+            // Using fetch to submit to FormSubmit
+            const response = await fetch(submitUrl, {
+              method: 'POST',
+              body: formData,
+              mode: 'no-cors' // This is needed for FormSubmit to work
+            });
+            
+            setSubmitStatus('success');
+            setTimeout(() => {
+              onClose();
+              // Reset after closing
+              setSubmitStatus(null);
+              setFormData({ name: '', email: '', business: '', phone: '', message: '' });
+            }, 2000);
+          } catch (error) {
+            setSubmitStatus('error');
+            setTimeout(() => setSubmitStatus(null), 3000);
+          } finally {
+            setIsSubmitting(false);
+          }
+        };
+
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-black/70" onClick={onClose}></div>
+            <div className="relative z-10 w-full max-w-md rounded-2xl border border-white/10 bg-neutral-900/95 p-6 shadow-xl max-h-[90vh] overflow-y-auto modal-enter">
+              <div className="flex items-start justify-between mb-4">
+                <h2 className="text-xl sm:text-2xl font-semibold text-white">{title}</h2>
+                <button
+                  onClick={onClose}
+                  className="text-gray-400 hover:text-gray-200 transition text-2xl leading-none p-2 -m-2"
+                  aria-label="Close"
+                >
+                  &times;
+                </button>
+              </div>
+
+              {submitStatus === 'success' && (
+                <div className="mb-4 p-3 bg-green-500/20 border border-green-500/50 rounded-lg text-green-400 text-center">
+                  Message sent successfully! We'll get back to you soon.
+                </div>
+              )}
+
+              {submitStatus === 'error' && (
+                <div className="mb-4 p-3 bg-red-500/20 border border-red-500/50 rounded-lg text-red-400 text-center">
+                  Something went wrong. Please try again or email us directly.
+                </div>
+              )}
+
+              <form 
+                className="grid gap-4" 
+                action={submitUrl}
+                method="POST"
+                onSubmit={handleSubmit}
+              >
+                <input type="hidden" name="_subject" value={isPartnerForm ? 'Partner inquiry - Healthy Luxembourg' : 'Contact form message - Healthy Luxembourg'} />
+                <input type="hidden" name="_captcha" value="false" />
+                <input type="hidden" name="_template" value="table" />
+                
+                <div className="grid gap-2">
+                  <label className="text-sm uppercase tracking-wide text-gray-400" htmlFor="name">Name & Surname *</label>
+                  <input
+                    id="name"
+                    name="name"
+                    type="text"
+                    required
+                    value={formData.name}
+                    onChange={handleChange}
+                    className="w-full rounded-lg border border-white/20 bg-black/30 px-4 py-2.5 text-gray-100 focus:border-[#8cc63f] focus:outline-none"
+                    placeholder="Your full name"
+                  />
+                </div>
+
+                <div className="grid gap-2">
+                  <label className="text-sm uppercase tracking-wide text-gray-400" htmlFor="email">Email address *</label>
+                  <input
+                    id="email"
+                    name="email"
+                    type="email"
+                    required
+                    value={formData.email}
+                    onChange={handleChange}
+                    className="w-full rounded-lg border border-white/20 bg-black/30 px-4 py-2.5 text-gray-100 focus:border-[#8cc63f] focus:outline-none"
+                    placeholder="you@example.com"
+                  />
+                </div>
+
+                {isPartnerForm && (
+                  <>
+                    <div className="grid gap-2">
+                      <label className="text-sm uppercase tracking-wide text-gray-400" htmlFor="business">Business name *</label>
+                      <input
+                        id="business"
+                        name="business"
+                        type="text"
+                        required
+                        value={formData.business}
+                        onChange={handleChange}
+                        className="w-full rounded-lg border border-white/20 bg-black/30 px-4 py-2.5 text-gray-100 focus:border-[#8cc63f] focus:outline-none"
+                        placeholder="Your business name"
+                      />
+                    </div>
+
+                    <div className="grid gap-2">
+                      <label className="text-sm uppercase tracking-wide text-gray-400" htmlFor="phone">Phone number (optional)</label>
+                      <input
+                        id="phone"
+                        name="phone"
+                        type="tel"
+                        value={formData.phone}
+                        onChange={handleChange}
+                        className="w-full rounded-lg border border-white/20 bg-black/30 px-4 py-2.5 text-gray-100 focus:border-[#8cc63f] focus:outline-none"
+                        placeholder="+352 ..."
+                      />
+                    </div>
+                  </>
+                )}
+
+                <div className="grid gap-2">
+                  <label className="text-sm uppercase tracking-wide text-gray-400" htmlFor="message">Message *</label>
+                  <textarea
+                    id="message"
+                    name="message"
+                    rows="4"
+                    required
+                    value={formData.message}
+                    onChange={handleChange}
+                    className="w-full rounded-lg border border-white/20 bg-black/30 px-4 py-2.5 text-gray-100 focus:border-[#8cc63f] focus:outline-none"
+                    placeholder={isPartnerForm ? "Tell us about your business and why you'd like to partner with us..." : "How can we help you?"}
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="mt-2 w-full inline-flex justify-center rounded-lg bg-gradient-to-r from-[#8cc63f] via-[#58b0d8] to-[#1b75bb] px-4 py-2.5 text-sm font-semibold text-[#04120c] shadow-[0_15px_35px_rgba(20,90,120,0.35)] transition hover:scale-[1.01] active:scale-[0.99] disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isSubmitting ? 'Sending...' : 'Send Message'}
+                </button>
+                
+                <p className="text-xs text-gray-400 text-center">
+                  We'll respond within 24-48 hours.
+                </p>
+              </form>
+            </div>
+          </div>
+        );
+      }
 
       function Dropdown({ label, items = [] }) {
         const [open, setOpen] = useState(false);
@@ -432,6 +618,8 @@
         const [authMode, setAuthMode] = useState(null);
         const [authError, setAuthError] = useState('');
         const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+        const [contactFormType, setContactFormType] = useState(null); // 'partner', 'contact', or null
+        
         const languages = Object.keys(translations);
 
         useEffect(() => { localStorage.setItem('hl-lang', language); }, [language]);
@@ -460,6 +648,15 @@
           setMobileMenuOpen(false);
         };
 
+        const openContactForm = (type) => {
+          setContactFormType(type);
+          setMobileMenuOpen(false);
+        };
+
+        const closeContactForm = () => {
+          setContactFormType(null);
+        };
+
         const scrollToSection = (id) => {
           const el = document.getElementById(id);
           if (el) {
@@ -477,378 +674,4 @@
           setAuthError('');
           const storedUser = getStoredUser();
           const email = (formData.email || '').trim().toLowerCase();
-          const password = (formData.password || '').trim();
-
-          if (!email || !password) {
-            setAuthError('Please enter your email and password.');
-            return;
-          }
-
-          if (mode === 'login') {
-            if (!storedUser || storedUser.email !== email || storedUser.password !== password) {
-              setAuthError('Incorrect email or password.');
-              return;
-            }
-            setUser(storedUser);
-            closeAuthModal();
-            return;
-          }
-
-          if ((formData.name || '').trim().length < 2) {
-            setAuthError('Please enter your full name.');
-            return;
-          }
-
-          if (password.length < 4) {
-            setAuthError('Password must be at least 4 characters long.');
-            return;
-          }
-
-          if (storedUser && storedUser.email === email) {
-            setAuthError('An account with this email already exists. Please log in.');
-            return;
-          }
-
-          const newUser = {
-            name: formData.name.trim(),
-            email,
-            password,
-          };
-          try {
-            localStorage.setItem(USER_KEY, JSON.stringify(newUser));
-          } catch (error) {
-            console.warn('Failed to store new user', error);
-          }
-          setUser(newUser);
-          closeAuthModal();
-        };
-
-        const handleLogout = () => {
-          setUser(null);
-          try {
-            localStorage.setItem(AUTH_KEY, 'false');
-          } catch (error) {
-            console.warn('Failed to clear auth flag', error);
-          }
-        };
-
-        const t = translations[language] || translations.en;
-
-        const handleJoin = () => {
-          openAuthModal('register');
-        };
-
-        return (
-          <div className="min-h-screen flex flex-col items-center">
-            <nav className="sticky top-0 z-30 w-full border-b border-white/10 bg-[#0b1512]/80 backdrop-blur supports-[backdrop-filter]:bg-[#0b1512]/60">
-              <div className="container-max mx-auto flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4">
-                <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
-                  <img src="https://i.imgur.com/eKs0Yrj.png" alt="Healthy Luxembourg logo" className="h-14 sm:h-20 md:h-24 w-auto drop-shadow-[0_8px_30px_rgba(27,117,187,0.35)]" />
-                  <span className="text-base sm:text-lg font-semibold text-white whitespace-nowrap">
-                    <span className="mr-1 font-black text-[#8cc63f]">Healthy</span>
-                    <span className="hidden xs:inline">Luxembourg</span>
-                    <span className="xs:hidden">LUX</span>
-                  </span>
-                </div>
-
-                {/* Desktop Navigation */}
-                <div className="hidden lg:flex items-center gap-4 xl:gap-8 text-sm text-white/70">
-                  <Dropdown
-                    label={t.nav.merchants}
-                    items={[
-                      {
-                        label: 'Become partner',
-                        onSelect: () => (window.location.href = 'contact.html'),
-                      },
-                      {
-                        label: 'List of partners',
-                        onSelect: () => (window.location.href = 'partners.html'),
-                      },
-                    ]}
-                  />
-                  <a href="about.html" className="transition hover:text-white px-2 py-2">{t.nav.about}</a>
-                  <a href="contact.html" className="transition hover:text-white px-2 py-2">{t.nav.contact}</a>
-                  <a href="how-it-works.html" className="transition hover:text-white px-2 py-2">{t.nav.how}</a>
-                </div>
-
-                <div className="flex items-center gap-1 sm:gap-2 md:gap-3">
-                  <Dropdown
-                    label={language === 'lb' ? 'LU' : language.toUpperCase()}
-                    items={languages.map((code) => ({
-                      label: code === 'lb' ? 'LU' : code.toUpperCase(),
-                      onSelect: () => setLanguage(code),
-                    }))}
-                  />
-                  
-                  {/* Mobile menu button */}
-                  <button
-                    onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-                    className="lg:hidden p-2 text-white/70 hover:text-white"
-                    aria-label="Toggle menu"
-                  >
-                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      {mobileMenuOpen ? (
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                      ) : (
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-                      )}
-                    </svg>
-                  </button>
-
-                  {/* Desktop auth buttons */}
-                  <div className="hidden md:flex items-center gap-2">
-                    {user ? (
-                      <>
-                        <button
-                          onClick={() => (window.location.href = 'payment.html')}
-                          className="rounded-full border border-[#8cc63f]/60 bg-[#8cc63f]/10 px-3 py-1.5 text-xs font-medium text-[#8cc63f] transition hover:bg-[#8cc63f]/20 whitespace-nowrap"
-                        >
-                          {t.account}: {user.name.split(' ')[0]}
-                        </button>
-                        <button
-                          onClick={handleLogout}
-                          className="rounded-full border border-white/20 bg-transparent px-3 py-1.5 text-xs font-medium text-white/70 transition hover:border-white/40 hover:text-white whitespace-nowrap"
-                        >
-                          {t.logout}
-                        </button>
-                      </>
-                    ) : (
-                      <>
-                        <button
-                          onClick={() => openAuthModal('login')}
-                          className="rounded-full border border-white/20 bg-transparent px-3 py-1.5 text-xs font-medium text-white/70 transition hover:border-white/40 hover:text-white whitespace-nowrap"
-                        >
-                          {t.login}
-                        </button>
-                        <button
-                          onClick={() => openAuthModal('register')}
-                          className="rounded-full bg-gradient-to-r from-[#8cc63f] via-[#58b0d8] to-[#1b75bb] px-3 py-1.5 text-xs font-semibold text-[#04120c] shadow-[0_15px_35px_rgba(18,85,118,0.4)] transition hover:scale-[1.03] active:scale-[0.98] whitespace-nowrap"
-                        >
-                          {t.register}
-                        </button>
-                      </>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Mobile menu */}
-              {mobileMenuOpen && (
-                <div className="lg:hidden border-t border-white/10 bg-[#0b1512]/95">
-                  <div className="container-max mx-auto px-4 py-4 flex flex-col gap-2">
-                    <Dropdown
-                      label={t.nav.merchants}
-                      items={[
-                        {
-                          label: 'Become partner',
-                          onSelect: () => {
-                            window.location.href = 'contact.html';
-                            setMobileMenuOpen(false);
-                          },
-                        },
-                        {
-                          label: 'List of partners',
-                          onSelect: () => {
-                            window.location.href = 'partners.html';
-                            setMobileMenuOpen(false);
-                          },
-                        },
-                      ]}
-                    />
-                    <a href="about.html" className="py-3 text-white/70 hover:text-white" onClick={() => setMobileMenuOpen(false)}>{t.nav.about}</a>
-                    <a href="contact.html" className="py-3 text-white/70 hover:text-white" onClick={() => setMobileMenuOpen(false)}>{t.nav.contact}</a>
-                    <a href="how-it-works.html" className="py-3 text-white/70 hover:text-white" onClick={() => setMobileMenuOpen(false)}>{t.nav.how}</a>
-                    
-                    {/* Mobile auth buttons */}
-                    <div className="flex flex-col gap-2 pt-4 border-t border-white/10">
-                      {user ? (
-                        <>
-                          <button
-                            onClick={() => {
-                              window.location.href = 'payment.html';
-                              setMobileMenuOpen(false);
-                            }}
-                            className="w-full rounded-full border border-[#8cc63f]/60 bg-[#8cc63f]/10 px-4 py-3 text-sm font-medium text-[#8cc63f]"
-                          >
-                            {t.account}: {user.name.split(' ')[0]}
-                          </button>
-                          <button
-                            onClick={() => {
-                              handleLogout();
-                              setMobileMenuOpen(false);
-                            }}
-                            className="w-full rounded-full border border-white/20 bg-transparent px-4 py-3 text-sm font-medium text-white/70"
-                          >
-                            {t.logout}
-                          </button>
-                        </>
-                      ) : (
-                        <>
-                          <button
-                            onClick={() => openAuthModal('login')}
-                            className="w-full rounded-full border border-white/20 bg-transparent px-4 py-3 text-sm font-medium text-white/70"
-                          >
-                            {t.login}
-                          </button>
-                          <button
-                            onClick={() => openAuthModal('register')}
-                            className="w-full rounded-full bg-gradient-to-r from-[#8cc63f] via-[#58b0d8] to-[#1b75bb] px-4 py-3 text-sm font-semibold text-[#04120c]"
-                          >
-                            {t.register}
-                          </button>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              )}
-            </nav>
-
-            <main className="flex-1 w-full">
-              <section className="relative px-4 sm:px-6 pt-12 sm:pt-16 pb-16 sm:pb-24 md:pt-24">
-                <div className="container-max mx-auto">
-                  <div className="grid items-center gap-8 lg:gap-16 lg:grid-cols-[1.05fr_1fr]">
-                    <div className="space-y-6 sm:space-y-8 text-left">
-                      <div className="inline-flex w-fit items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 sm:px-5 py-1.5 sm:py-2 text-xs font-semibold uppercase tracking-[0.25em] sm:tracking-[0.35em] text-[#8cc63f]">
-                        Healthy Luxembourg
-                      </div>
-                      <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-semibold leading-[1.08] pb-1 sm:pb-2 text-transparent bg-clip-text bg-gradient-to-r from-[#8cc63f] to-[#1b75bb]">
-                        {t.slogan}
-                      </h1>
-                      <div className="flex flex-wrap items-center gap-3 sm:gap-4 text-2xl sm:text-3xl md:text-4xl font-semibold text-[#8cc63f]">
-                        {t.priceTag}
-                      </div>
-                      <p className="max-w-xl text-base sm:text-lg text-gray-300">
-                        {t.intro}
-                      </p>
-                      <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-                        <button
-                          onClick={handleJoin}
-                          className="w-full sm:w-auto inline-flex items-center justify-center rounded-full bg-gradient-to-r from-[#8cc63f] via-[#58b0d8] to-[#1b75bb] px-6 sm:px-8 py-3 text-base sm:text-lg font-semibold text-[#04120c] shadow-[0_25px_45px_rgba(15,70,110,0.45)] transition hover:scale-[1.02] active:scale-[0.98]"
-                        >
-                          {t.join}
-                        </button>
-                        <div className="flex items-center gap-3 text-sm text-gray-300">
-                          <span className="inline-flex h-10 w-10 sm:h-11 sm:w-11 items-center justify-center rounded-full border border-white/15 bg-white/5 text-base font-semibold text-[#8cc63f] flex-shrink-0">
-                            %
-                          </span>
-                          <span className="text-xs sm:text-sm leading-relaxed">
-                            {t.ctaDetails}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="relative min-h-[200px] sm:min-h-[360px] flex items-center justify-center lg:justify-end">
-                        <div className="pointer-events-none">
-                          <img
-                            src={HERO_IMAGE_SRC}
-                            alt="Healthy Luxembourg logo background"
-                            className="h-[180px] sm:h-[280px] md:h-[350px] lg:h-[420px] w-auto max-w-[90vw] opacity-16 sm:opacity-20 drop-shadow-[0_30px_70px_rgba(7,20,16,0.45)]"
-                          />
-                        </div>
-                      </div>
-                  </div>
-
-                  <div className="mt-16 sm:mt-20 scroll-mt-32" id="partners">
-                    <h2 className="text-center text-xs sm:text-sm font-semibold uppercase tracking-[0.25em] sm:tracking-[0.35em] text-[#8cc63f]">{t.partners}</h2>
-                    <div className="mt-6 sm:mt-8 mx-auto grid max-w-4xl grid-cols-1 sm:grid-cols-2 justify-items-center gap-4 sm:gap-6">
-                      {partners.map((partner, index) => (
-                        <div
-                          key={index}
-                          className="relative w-full overflow-hidden rounded-xl sm:rounded-2xl border border-white/10 bg-[#0f1d18]/80 p-4 sm:p-6 shadow-[0_20px_45px_rgba(7,20,16,0.4)] transition hover:-translate-y-1 hover:border-[#8cc63f]/40"
-                        >
-                          <div className="flex items-start gap-3 sm:gap-4">
-                            <div
-                              className="flex h-10 w-10 sm:h-12 sm:w-12 flex-shrink-0 items-center justify-center rounded-xl sm:rounded-2xl border bg-white/5"
-                              style={{ borderColor: `${partner.color}55`, background: `linear-gradient(135deg, ${partner.color}1a 0%, rgba(9,22,18,0.8) 100%)` }}
-                            >
-                              {renderPartnerIcon(partner.icon, partner.color)}
-                            </div>
-                            <div className="min-w-0 flex-1">
-                              <h3 className="text-base sm:text-lg font-semibold text-white truncate">{partner.name}</h3>
-                              <p className="mt-1 sm:mt-2 text-xs sm:text-sm text-gray-300 line-clamp-2">{partner.desc}</p>
-                              <div className="mt-3 sm:mt-4 flex flex-wrap items-center gap-2 text-xs">
-                                <span
-                                  className="inline-flex items-center rounded-full border px-2 sm:px-3 py-0.5 sm:py-1 font-medium"
-                                  style={{ borderColor: `${partner.color}55`, color: partner.color }}
-                                >
-                                  {partner.discount}
-                                </span>
-                                <span className="inline-flex items-center rounded-full border border-white/15 bg-white/5 px-2 sm:px-3 py-0.5 sm:py-1 text-gray-300">
-                                  {partner.hours}
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="mt-16 sm:mt-24 rounded-2xl sm:rounded-3xl border border-white/10 bg-[#0f1d19]/70 p-6 sm:p-8 md:p-12 shadow-[0_25px_60px_rgba(7,20,16,0.4)]">
-                    <div className="flex flex-col gap-4 sm:gap-6 md:flex-row md:items-end md:justify-between">
-                      <div>
-                        <h2 className="text-2xl sm:text-3xl md:text-4xl font-semibold text-white">{t.team}</h2>
-                        <p className="mt-1 sm:mt-2 text-xs sm:text-sm text-gray-300">
-                          {(t.teamIntro || 'Students from Lycee ECG building a healthier Luxembourg.')}
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-3 text-xs uppercase tracking-[0.25em] sm:tracking-[0.35em] text-white/50">
-                        <span className="inline-flex h-2 w-2 rounded-full bg-[#8cc63f]"></span>
-                        {new Date().getFullYear()}
-                      </div>
-                    </div>
-                    <div className="mt-8 sm:mt-10 grid gap-4 sm:gap-6 grid-cols-1 sm:grid-cols-3">
-                      {teamMembers.map((member, index) => (
-                        <div
-                          key={index}
-                          className="group relative flex flex-col items-center overflow-hidden rounded-xl sm:rounded-2xl border border-white/10 bg-white/5 p-4 sm:p-6 text-center shadow-[0_20px_45px_rgba(6,18,14,0.4)] transition hover:-translate-y-1 hover:border-[#8cc63f]/40"
-                        >
-                          {member.image ? (
-                            <div className="relative mb-4 sm:mb-5 h-28 w-28 sm:h-32 sm:w-32 md:h-36 md:w-36 overflow-hidden rounded-full sm:rounded-none bg-transparent">
-                              <img
-                                src={member.image}
-                                alt={`${member.name} portrait`}
-                                className="h-full w-full object-cover object-center opacity-90 transition duration-200 group-hover:scale-[1.02] filter brightness-90 contrast-105"
-                              />
-                            </div>
-                          ) : (
-                            <div className="relative mb-4 sm:mb-5 h-28 w-28 sm:h-32 sm:w-32 md:h-36 md:w-36 overflow-hidden rounded-full sm:rounded-none bg-gradient-to-br from-[#8cc63f]/35 via-[#0f271f] to-[#1b75bb]/35">
-                              <div className="absolute inset-0 flex items-end justify-center pb-3 sm:pb-4 text-base sm:text-lg font-semibold text-white/90 uppercase tracking-[0.2em] sm:tracking-[0.3em]">
-                                {member.name.split(' ')[0]}
-                              </div>
-                            </div>
-                          )}
-                          <h3 className="text-base sm:text-lg font-semibold text-white">{member.name}</h3>
-                          <p className="mt-1 sm:mt-2 text-xs sm:text-sm text-gray-300">{member.role}</p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </section>
-            </main>
-
-            {authMode && (
-              <AuthModal
-                mode={authMode}
-                onClose={closeAuthModal}
-                onSubmit={handleAuthSubmit}
-                onSwitchMode={(mode) => openAuthModal(mode)}
-                error={authError}
-              />
-            )}
-
-            <footer className="w-full px-4 sm:px-6 pb-8 sm:pb-12 text-center text-xs sm:text-sm text-white/40">
-              <p>&copy; {new Date().getFullYear()} Healthy Luxembourg &mdash; All rights reserved.</p>
-            </footer>
-          </div>
-        );
-      }
-
-      const root = ReactDOM.createRoot(document.getElementById('root'));
-      root.render(<App />);
-    </script>
-  </body>
-</html>
-
+         
