@@ -94,7 +94,7 @@
 
       function getStoredUser() {
         try {
-          const authed = localStorage.getItem(AUTH_KEY) === 'true';
+          const authed = localStorage.getItem('hl-authenticated') === 'true';
           if (!authed) { return null; }
           
           const currentUserEmail = localStorage.getItem('hl-current-user-email');
@@ -139,7 +139,7 @@
           
           try {
             // Using fetch to submit to FormSubmit
-            const response = await fetch(submitUrl, {
+            await fetch(submitUrl, {
               method: 'POST',
               body: formData,
               mode: 'no-cors' // This is needed for FormSubmit to work
@@ -684,7 +684,57 @@
           setAuthSuccess('');
         };
 
-        const handleAuthSubmit = (mode, formData) => {
+        const sendWelcomeEmail = async (userName, userEmail) => {
+          try {
+            // Create HTML email template
+            const htmlMessage = `
+              <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                <div style="background: linear-gradient(135deg, #8cc63f, #1b75bb); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
+                  <h1 style="color: white; margin: 0;">Welcome to Healthy Luxembourg!</h1>
+                </div>
+                <div style="background: #0f1d18; padding: 30px; border-radius: 0 0 10px 10px; color: #e5e5e5;">
+                  <p style="font-size: 18px;">Hi <strong>${userName}</strong>,</p>
+                  <p>We're thrilled to have you join our community! 🎉</p>
+                  <p>With your Healthy Luxembourg membership, you now have access to exclusive discounts at:</p>
+                  <ul style="list-style-type: none; padding: 0;">
+                    <li style="margin: 10px 0;">✓ Fitness centers across Luxembourg</li>
+                    <li style="margin: 10px 0;">✓ Yoga & Pilates studios</li>
+                    <li style="margin: 10px 0;">✓ Healthy food partners</li>
+                    <li style="margin: 10px 0;">✓ Bio & Wellness shops</li>
+                  </ul>
+                  <div style="text-align: center; margin: 30px 0;">
+                    <a href="#" style="background: #8cc63f; color: #04120c; padding: 12px 30px; text-decoration: none; border-radius: 25px; font-weight: bold;">Log In Now</a>
+                  </div>
+                  <p style="color: #a0a0a0; font-size: 14px; text-align: center;">
+                    Questions? Contact us at healthyluxembourg.contact@gmail.com
+                  </p>
+                </div>
+              </div>
+            `;
+
+            const formData = new FormData();
+            formData.append('name', userName);
+            formData.append('email', userEmail);
+            formData.append('_subject', '🎉 Welcome to Healthy Luxembourg!');
+            formData.append('_template', 'table');
+            formData.append('_captcha', 'false');
+            formData.append('message', `Welcome to Healthy Luxembourg, ${userName}! We're excited to have you on board. You can now log in and start enjoying exclusive discounts.`);
+            formData.append('_html', htmlMessage);
+            
+            await fetch('https://formsubmit.co/healthyluxembourg.contact@gmail.com', {
+              method: 'POST',
+              body: formData,
+              mode: 'no-cors'
+            });
+            
+            console.log('Welcome email sent to:', userEmail);
+          } catch (error) {
+            console.warn('Failed to send welcome email:', error);
+            // Don't block signup if email fails
+          }
+        };
+
+        const handleAuthSubmit = async (mode, formData) => {
           setAuthError('');
           setAuthSuccess('');
           
@@ -760,8 +810,11 @@
             existingUsers.push(newUser);
             localStorage.setItem('hl-users', JSON.stringify(existingUsers));
             
+            // Send welcome email (don't await - let it happen in background)
+            sendWelcomeEmail(newUser.name, newUser.email);
+            
             // Show success message and switch to login
-            setAuthSuccess('Account created successfully! Please log in with your credentials.');
+            setAuthSuccess('Account created successfully! Please check your email for a welcome message and then log in with your credentials.');
             setAuthMode('login');
             
           } catch (error) {
