@@ -81,6 +81,33 @@
     <script type="text/babel">
       const { useState, useEffect } = React;
 
+      // Helper functions for user management
+      function getAllUsers() {
+        try {
+          const raw = localStorage.getItem('hl-users');
+          return raw ? JSON.parse(raw) : [];
+        } catch (error) {
+          console.warn('Failed to parse stored users', error);
+          return [];
+        }
+      }
+
+      function getStoredUser() {
+        try {
+          const authed = localStorage.getItem(AUTH_KEY) === 'true';
+          if (!authed) { return null; }
+          
+          const currentUserEmail = localStorage.getItem('hl-current-user-email');
+          if (!currentUserEmail) return null;
+          
+          const users = getAllUsers();
+          return users.find(u => u.email === currentUserEmail) || null;
+        } catch (error) {
+          console.warn('Failed to read stored authentication', error);
+          return null;
+        }
+      }
+
       // Contact Form Modal Component
       function ContactFormModal({ type, onClose }) {
         const [formData, setFormData] = useState({
@@ -473,7 +500,7 @@
         },
       };
 
-            const partners = [
+      const partners = [
         { name: 'Factory 4', icon: 'dumbbell', color: '#8CC63F', discount: '15% off membership', hours: 'Daily 06:00-22:00', desc: 'Boutique training gym with strength, conditioning, and small-group coaching.' },
         { name: 'Elysium', icon: 'lotus', color: '#1B75BB', discount: '10% off classes', hours: 'Daily 07:00-21:00', desc: 'Premium wellness studio offering yoga, pilates, and recovery sessions.' },
       ];
@@ -487,17 +514,7 @@
       const AUTH_KEY = 'hl-authenticated';
       const USER_KEY = 'hl-user';
 
-      function getStoredUser() {
-        try {
-          const raw = localStorage.getItem(USER_KEY);
-          return raw ? JSON.parse(raw) : null;
-        } catch (error) {
-          console.warn('Failed to parse stored user', error);
-          return null;
-        }
-      }
-
-      function AuthModal({ mode, onClose, onSubmit, onSwitchMode, error }) {
+      function AuthModal({ mode, onClose, onSubmit, onSwitchMode, error, successMessage }) {
         const isRegister = mode === 'register';
         const [form, setForm] = useState({ name: '', email: '', password: '' });
 
@@ -532,6 +549,12 @@
                   &times;
                 </button>
               </div>
+
+              {successMessage && (
+                <div className="mb-4 p-3 bg-green-500/20 border border-green-500/50 rounded-lg text-green-400 text-center">
+                  {successMessage}
+                </div>
+              )}
 
               <form className="grid gap-4" onSubmit={handleSubmit}>
                 {isRegister && (
@@ -571,7 +594,7 @@
                     name="password"
                     type="password"
                     required
-                    placeholder={isRegister ? 'Create a password' : 'Enter your password'}
+                    placeholder={isRegister ? 'Create a password (min. 4 characters)' : 'Enter your password'}
                     value={form.password}
                     onChange={handleChange}
                     className="w-full rounded-lg border border-white/20 bg-black/30 px-4 py-2.5 text-gray-100 focus:border-[#8cc63f] focus:outline-none"
@@ -584,7 +607,7 @@
                   type="submit"
                   className="mt-2 w-full inline-flex justify-center rounded-lg bg-gradient-to-r from-[#8cc63f] via-[#58b0d8] to-[#1b75bb] px-4 py-2.5 text-sm font-semibold text-[#04120c] shadow-[0_15px_35px_rgba(20,90,120,0.35)] transition hover:scale-[1.01] active:scale-[0.99]"
                 >
-                  {isRegister ? 'Create account & continue' : 'Log in'}
+                  {isRegister ? 'Create account' : 'Log in'}
                 </button>
               </form>
 
@@ -617,24 +640,13 @@
         });
         const [authMode, setAuthMode] = useState(null);
         const [authError, setAuthError] = useState('');
+        const [authSuccess, setAuthSuccess] = useState('');
         const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
         const [contactFormType, setContactFormType] = useState(null); // 'partner', 'contact', or null
         
         const languages = Object.keys(translations);
 
         useEffect(() => { localStorage.setItem('hl-lang', language); }, [language]);
-        useEffect(() => {
-          try {
-            if (user) {
-              localStorage.setItem(USER_KEY, JSON.stringify(user));
-              localStorage.setItem(AUTH_KEY, 'true');
-            } else if (localStorage.getItem(AUTH_KEY) === 'true') {
-              localStorage.setItem(AUTH_KEY, 'false');
-            }
-          } catch (error) {
-            console.warn('Failed to persist authentication state', error);
-          }
-        }, [user]);
 
         const cycleLanguage = () => {
           const currentIndex = languages.indexOf(language);
@@ -642,9 +654,10 @@
           setLanguage(languages[nextIndex]);
         };
 
-        const openAuthModal = (mode) => {
+        const openAuthModal = (mode, successMsg = '') => {
           setAuthMode(mode);
           setAuthError('');
+          setAuthSuccess(successMsg);
           setMobileMenuOpen(false);
         };
 
@@ -668,11 +681,23 @@
         const closeAuthModal = () => {
           setAuthMode(null);
           setAuthError('');
+          setAuthSuccess('');
         };
 
         const handleAuthSubmit = (mode, formData) => {
           setAuthError('');
-          const storedUser = getStoredUser();
+          setAuthSuccess('');
+          
+          // Get all stored users
+          let existingUsers = [];
+          try {
+            const usersRaw = localStorage.getItem('hl-users');
+            existingUsers = usersRaw ? JSON.parse(usersRaw) : [];
+          } catch (error) {
+            console.warn('Failed to parse stored users', error);
+            existingUsers = [];
+          }
+          
           const email = (formData.email || '').trim().toLowerCase();
           const password = (formData.password || '').trim();
 
@@ -682,15 +707,28 @@
           }
 
           if (mode === 'login') {
-            if (!storedUser || storedUser.email !== email || storedUser.password !== password) {
+            // Find user in the users array
+            const foundUser = existingUsers.find(u => u.email === email && u.password === password);
+            
+            if (!foundUser) {
               setAuthError('Incorrect email or password.');
               return;
             }
-            setUser(storedUser);
+            
+            // Set current user
+            try {
+              localStorage.setItem('hl-current-user-email', foundUser.email);
+              localStorage.setItem(AUTH_KEY, 'true');
+            } catch (error) {
+              console.warn('Failed to persist user', error);
+            }
+            
+            setUser(foundUser);
             closeAuthModal();
             return;
           }
 
+          // REGISTER mode
           if ((formData.name || '').trim().length < 2) {
             setAuthError('Please enter your full name.');
             return;
@@ -701,28 +739,41 @@
             return;
           }
 
-          if (storedUser && storedUser.email === email) {
-            setAuthError('An account with this email already exists. Please log in.');
+          // Check if email is already registered
+          const emailExists = existingUsers.some(u => u.email === email);
+          
+          if (emailExists) {
+            setAuthError('This email is already registered. Please log in instead.');
             return;
           }
 
+          // Create new user
           const newUser = {
             name: formData.name.trim(),
             email,
-            password,
+            password, // Note: In production, you should hash this!
+            createdAt: new Date().toISOString()
           };
+          
           try {
-            localStorage.setItem(USER_KEY, JSON.stringify(newUser));
+            // Add to users array
+            existingUsers.push(newUser);
+            localStorage.setItem('hl-users', JSON.stringify(existingUsers));
+            
+            // Show success message and switch to login
+            setAuthSuccess('Account created successfully! Please log in with your credentials.');
+            setAuthMode('login');
+            
           } catch (error) {
             console.warn('Failed to store new user', error);
+            setAuthError('Failed to create account. Please try again.');
           }
-          setUser(newUser);
-          closeAuthModal();
         };
 
         const handleLogout = () => {
           setUser(null);
           try {
+            localStorage.removeItem('hl-current-user-email');
             localStorage.setItem(AUTH_KEY, 'false');
           } catch (error) {
             console.warn('Failed to clear auth flag', error);
@@ -1044,6 +1095,7 @@
                 onSubmit={handleAuthSubmit}
                 onSwitchMode={(mode) => openAuthModal(mode)}
                 error={authError}
+                successMessage={authSuccess}
               />
             )}
 
