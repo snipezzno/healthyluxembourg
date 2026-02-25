@@ -40,6 +40,8 @@
         to { opacity: 1; transform: scale(1); }
       }
     </style>
+
+    <!-- EmailJS Library - CORRECTLY PLACED AFTER style tag -->
     <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
   </head>
   <body class="min-h-screen bg-[#07130f] text-gray-100 antialiased">
@@ -687,34 +689,33 @@
         };
 
         const sendWelcomeEmail = async (userName, userEmail) => {
-  try {
-    // Your EmailJS credentials (replace with your actual values)
-    const serviceId = 'service_njj5xgd'; // From Step 2
-    const templateId = 'template_803vie8'; // From Step 2
-    const publicKey = '-AqsZYcMuBDs6MFzO'; // From Step 2
+          try {
+            // Your EmailJS credentials
+            const serviceId = 'service_njj5xgd';
+            const templateId = 'template_803vie8';
+            const publicKey = '-AqsZYcMuBDs6MFzO';
 
-    // Template parameters matching your template variables [citation:7]
-    const templateParams = {
-      name: userName,
-      to_email: userEmail,
-      from_name: "Healthy Luxembourg",
-      reply_to: "healthyluxembourg.contact@gmail.com"
-    };
+            const templateParams = {
+              name: userName,
+              to_email: userEmail,
+              from_name: "Healthy Luxembourg",
+              reply_to: "healthyluxembourg.contact@gmail.com"
+            };
 
-    const response = await emailjs.send(
-      serviceId,
-      templateId,
-      templateParams,
-      publicKey
-    );
-    
-    console.log('Welcome email sent successfully!', response.status, response.text);
-    return true;
-  } catch (error) {
-    console.error('Failed to send welcome email:', error);
-    return false;
-  }
-};
+            const response = await emailjs.send(
+              serviceId,
+              templateId,
+              templateParams,
+              publicKey
+            );
+            
+            console.log('Welcome email sent successfully!', response.status, response.text);
+            return true;
+          } catch (error) {
+            console.error('Failed to send welcome email:', error);
+            return false;
+          }
+        };
 
         const handleAuthSubmit = async (mode, formData) => {
           setAuthError('');
@@ -1144,9 +1145,3 @@
     </script>
   </body>
 </html>
-
-
-
-
-
-
