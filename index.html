@@ -3,11 +3,13 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
-    <title>Healthy Luxembourg</title>
+    <title>Healthy Luxembourg · Stripe Integration</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <!-- Stripe JS -->
+    <script src="https://js.stripe.com/v3/"></script>
     <style>
       html, body { font-family: Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, "Helvetica Neue", Arial, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol"; }
       .container-max { max-width: 80rem; width: 100%; margin-left: auto; margin-right: auto; }
@@ -19,7 +21,7 @@
           linear-gradient(180deg, #0b1512 0%, #060b0d 100%);
       }
       .vignette { pointer-events: none; box-shadow: inset 0 0 240px 100px rgba(0,0,0,0.35); }
-      .bg-icons { position: fixed; inset: 0; pointer-events: none; overflow: hidden; }
+      .bg-icons { position: fixed; inset: 0; pointer-events: none; overflow: hidden; z-index: -5; }
       .bg-icons .icon { position: absolute; opacity: 0.16; color: #8cc63f; }
       .bg-icons .blue { color: #1b75bb; opacity: 0.14; }
       .bg-icons .green { color: #8cc63f; opacity: 0.18; }
@@ -31,7 +33,6 @@
       @media (max-width: 768px) {
         button, a { min-height: 44px; min-width: 44px; }
       }
-      /* Modal animations */
       .modal-enter {
         animation: modalFadeIn 0.2s ease-out;
       }
@@ -39,12 +40,23 @@
         from { opacity: 0; transform: scale(0.95); }
         to { opacity: 1; transform: scale(1); }
       }
-      /* Dashboard glow effects */
       .glow-green { box-shadow: 0 0 18px 2px rgba(140,198,63,0.3); }
       .glow-red { box-shadow: 0 0 18px 2px rgba(239,68,68,0.25); }
+      /* Stripe Elements styling */
+      .StripeElement {
+        background-color: rgba(0, 0, 0, 0.3);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        border-radius: 0.5rem;
+        padding: 0.75rem;
+        color: white;
+      }
+      .StripeElement--focus {
+        border-color: #8cc63f;
+      }
+      .StripeElement--invalid {
+        border-color: #ef4444;
+      }
     </style>
-
-    <!-- EmailJS Library -->
     <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
   </head>
   <body class="min-h-screen bg-[#07130f] text-gray-100 antialiased">
@@ -114,10 +126,43 @@
         }
       }
 
-      // ==================== PARTNER DATA (EXPANDED) ====================
+      // Check if user has active membership
+      function checkMembership(email) {
+        try {
+          const members = JSON.parse(localStorage.getItem('hl-members') || '{}');
+          return !!members[email];
+        } catch {
+          return false;
+        }
+      }
+
+      // Save membership status
+      function saveMembership(email) {
+        try {
+          const members = JSON.parse(localStorage.getItem('hl-members') || '{}');
+          members[email] = {
+            active: true,
+            since: new Date().toISOString()
+          };
+          localStorage.setItem('hl-members', JSON.stringify(members));
+          
+          // Initialize savings
+          const mockSavings = Math.floor(Math.random() * 45) + 24;
+          localStorage.setItem(`hl-savings-${email}`, mockSavings.toString());
+          
+          return true;
+        } catch (error) {
+          console.error('Failed to save membership:', error);
+          return false;
+        }
+      }
+
+      // ==================== PARTNER DATA ====================
       const partners = [
         { name: 'Factory 4', icon: 'dumbbell', color: '#8CC63F', discount: 'from 125€ to 105€ per month for a year subscription and from 68€ to 49€ for the activation fee', hours: 'Daily 06:00-22:00', desc: 'Premium Gym, Conditioning, and Group Classes.' },
         { name: 'Elysium', icon: 'lotus', color: '#1B75BB', discount: 'Coming soon', hours: 'Daily 05:00-22:00', desc: 'Premium Gym, Group Classes, HYROX Performance Zone' },
+        { name: 'BioGuster', icon: 'apple', color: '#8CC63F', discount: '10% off all organic products', hours: 'Mon-Sat 08:00-20:00', desc: 'Organic grocery & deli' },
+        { name: 'YogaLoft', icon: 'lotus', color: '#1B75BB', discount: '15% off class passes', hours: 'Mon-Fri 09:00-21:00', desc: 'Vinyasa, Hatha, meditation' },
       ];
 
       // ==================== ICON COMPONENTS ====================
@@ -291,9 +336,218 @@
       const HERO_IMAGE_SRC = 'https://i.imgur.com/eKs0Yrj.png';
       const AUTH_KEY = 'hl-authenticated';
 
+      // ==================== STRIPE PAYMENT MODAL ====================
+      function StripePaymentModal({ user, onClose, onSuccess }) {
+        const [loading, setLoading] = useState(false);
+        const [error, setError] = useState('');
+        const [cardElement, setCardElement] = useState(null);
+        
+        // Initialize Stripe
+        const stripe = window.Stripe('pk_test_YOUR_PUBLISHABLE_KEY'); // REPLACE WITH YOUR PUBLISHABLE KEY
+
+        const handleSubmit = async (e) => {
+          e.preventDefault();
+          setLoading(true);
+          setError('');
+
+          try {
+            // 1. Create payment intent on your backend
+            const response = await fetch('http://localhost:4242/create-payment-intent', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ 
+                userEmail: user.email,
+                amount: 999 // €9.99 in cents
+              })
+            });
+
+            const data = await response.json();
+            
+            if (!response.ok) {
+              throw new Error(data.error || 'Payment failed');
+            }
+
+            // 2. Confirm the payment with Stripe
+            const { error: stripeError, paymentIntent } = await stripe.confirmCardPayment(data.clientSecret, {
+              payment_method: {
+                card: cardElement,
+                billing_details: {
+                  email: user.email,
+                  name: user.name
+                }
+              }
+            });
+
+            if (stripeError) {
+              throw new Error(stripeError.message);
+            }
+
+            if (paymentIntent.status === 'succeeded') {
+              // Payment successful - activate membership
+              if (saveMembership(user.email)) {
+                onSuccess();
+                onClose();
+              } else {
+                throw new Error('Failed to activate membership');
+              }
+            }
+
+          } catch (err) {
+            setError(err.message);
+          } finally {
+            setLoading(false);
+          }
+        };
+
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-black/70" onClick={onClose}></div>
+            <div className="relative z-10 w-full max-w-md rounded-2xl border border-white/10 bg-neutral-900/95 p-6 shadow-xl modal-enter">
+              <div className="flex items-start justify-between mb-4">
+                <h2 className="text-xl font-semibold text-white">Complete Payment</h2>
+                <button onClick={onClose} className="text-gray-400 hover:text-gray-200 text-2xl p-2 -m-2">&times;</button>
+              </div>
+
+              <div className="mb-4 p-4 bg-white/5 rounded-lg">
+                <p className="text-sm text-gray-300">Membership: €9.99/month</p>
+                <p className="text-xs text-gray-400">Cancel anytime</p>
+              </div>
+
+              <form onSubmit={handleSubmit}>
+                <div className="mb-4">
+                  <label className="text-sm uppercase tracking-wide text-gray-400 mb-2 block">Card Details</label>
+                  <div 
+                    ref={(el) => {
+                      if (el && !cardElement) {
+                        const elements = stripe.elements();
+                        const card = elements.create('card', {
+                          style: {
+                            base: {
+                              color: '#fff',
+                              fontFamily: 'Inter, sans-serif',
+                              fontSize: '16px',
+                              '::placeholder': {
+                                color: '#9ca3af'
+                              }
+                            }
+                          }
+                        });
+                        card.mount(el);
+                        setCardElement(card);
+                      }
+                    }}
+                    className="StripeElement"
+                  />
+                </div>
+
+                {error && (
+                  <div className="mb-4 p-3 bg-red-500/20 border border-red-500/50 rounded-lg text-red-400 text-sm">
+                    {error}
+                  </div>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="w-full rounded-lg bg-gradient-to-r from-[#8cc63f] to-[#1b75bb] px-4 py-3 font-semibold text-[#04120c] disabled:opacity-50"
+                >
+                  {loading ? 'Processing...' : 'Pay €9.99'}
+                </button>
+
+                <p className="text-xs text-gray-400 text-center mt-4">
+                  🔒 Secure payment powered by Stripe
+                </p>
+              </form>
+            </div>
+          </div>
+        );
+      }
+
       // ==================== MODAL COMPONENTS ====================
 
-      // Contact Form Modal (original)
+      // Partners List Modal
+      function PartnersListModal({ onClose }) {
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-black/70" onClick={onClose}></div>
+            <div className="relative z-10 w-full max-w-2xl rounded-2xl border border-white/10 bg-neutral-900/95 p-6 shadow-xl max-h-[90vh] overflow-y-auto modal-enter">
+              <div className="flex items-start justify-between mb-4">
+                <h2 className="text-xl sm:text-2xl font-semibold text-white">Our partners</h2>
+                <button onClick={onClose} className="text-gray-400 hover:text-gray-200 text-2xl p-2 -m-2">&times;</button>
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                {partners.map((p, idx) => (
+                  <div key={idx} className="rounded-xl border border-white/10 bg-white/5 p-4 hover:border-[#8cc63f]/40 transition">
+                    <h3 className="text-lg font-semibold" style={{ color: p.color }}>{p.name}</h3>
+                    <p className="text-sm text-gray-300 mt-1">{p.desc}</p>
+                    <p className="text-xs text-gray-400 mt-2">⏰ {p.hours}</p>
+                    <div className="mt-2 inline-block rounded-full border px-3 py-0.5 text-xs" style={{ borderColor: p.color+'55', color: p.color }}>{p.discount}</div>
+                  </div>
+                ))}
+              </div>
+              <p className="text-center text-gray-400 text-sm mt-6">➕ more partners coming soon</p>
+            </div>
+          </div>
+        );
+      }
+
+      // How It Works Modal
+      function HowItWorksModal({ onClose }) {
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-black/70" onClick={onClose}></div>
+            <div className="relative z-10 w-full max-w-2xl rounded-2xl border border-white/10 bg-neutral-900/95 p-6 sm:p-8 shadow-xl max-h-[90vh] overflow-y-auto modal-enter">
+              <div className="flex items-start justify-between mb-4">
+                <h2 className="text-xl sm:text-2xl font-semibold text-white">How it works</h2>
+                <button onClick={onClose} className="text-gray-400 hover:text-gray-200 text-2xl p-2 -m-2">&times;</button>
+              </div>
+              
+              <div className="space-y-6 text-gray-200">
+                <div className="flex items-start gap-4">
+                  <div className="flex h-8 w-8 sm:h-10 sm:w-10 shrink-0 items-center justify-center rounded-full bg-[#8cc63f]/20 text-[#8cc63f] font-bold text-lg">1</div>
+                  <div>
+                    <h3 className="text-lg font-semibold text-white mb-1">Sign up for €9.99/month</h3>
+                    <p className="text-sm sm:text-base text-gray-300">Create your account in seconds. No hidden fees, cancel anytime.</p>
+                  </div>
+                </div>
+                
+                <div className="flex items-start gap-4">
+                  <div className="flex h-8 w-8 sm:h-10 sm:w-10 shrink-0 items-center justify-center rounded-full bg-[#1b75bb]/20 text-[#1b75bb] font-bold text-lg">2</div>
+                  <div>
+                    <h3 className="text-lg font-semibold text-white mb-1">Get your digital membership</h3>
+                    <p className="text-sm sm:text-base text-gray-300">After payment, you'll receive a unique QR code via email and in your account dashboard.</p>
+                  </div>
+                </div>
+                
+                <div className="flex items-start gap-4">
+                  <div className="flex h-8 w-8 sm:h-10 sm:w-10 shrink-0 items-center justify-center rounded-full bg-[#8cc63f]/20 text-[#8cc63f] font-bold text-lg">3</div>
+                  <div>
+                    <h3 className="text-lg font-semibold text-white mb-1">Show & save at partners</h3>
+                    <p className="text-sm sm:text-base text-gray-300">Present your QR code at any partner gym, studio or shop to get your exclusive discount instantly.</p>
+                  </div>
+                </div>
+
+                <div className="mt-6 rounded-xl border border-white/10 bg-white/5 p-4">
+                  <h4 className="font-medium text-[#8cc63f] mb-2">Example benefits:</h4>
+                  <ul className="list-disc pl-5 space-y-1 text-sm text-gray-300">
+                    <li>Factory 4: from 125€ → 105€ / month + reduced activation fee</li>
+                    <li>Elysium: discounts on memberships and classes (coming soon)</li>
+                    <li>10% off BioGuster, 15% off YogaLoft</li>
+                  </ul>
+                </div>
+                
+                <p className="text-sm italic text-gray-400">One membership, one QR code — your passport to a healthier Luxembourg.</p>
+              </div>
+              
+              <div className="mt-8 flex justify-end">
+                <button onClick={onClose} className="rounded-lg bg-gradient-to-r from-[#8cc63f] via-[#58b0d8] to-[#1b75bb] px-6 py-2 text-sm font-semibold text-[#04120c]">Got it</button>
+              </div>
+            </div>
+          </div>
+        );
+      }
+
+      // Contact Form Modal
       function ContactFormModal({ type, onClose }) {
         const [formData, setFormData] = useState({
           name: '',
@@ -354,7 +608,7 @@
             <div className="relative z-10 w-full max-w-md rounded-2xl border border-white/10 bg-neutral-900/95 p-6 shadow-xl max-h-[90vh] overflow-y-auto modal-enter">
               <div className="flex items-start justify-between mb-4">
                 <h2 className="text-xl sm:text-2xl font-semibold text-white">{title}</h2>
-                <button onClick={onClose} className="text-gray-400 hover:text-gray-200 transition text-2xl leading-none p-2 -m-2">&times;</button>
+                <button onClick={onClose} className="text-gray-400 hover:text-gray-200 text-2xl p-2 -m-2">&times;</button>
               </div>
 
               {submitStatus === 'success' && (
@@ -375,35 +629,35 @@
                 <input type="hidden" name="_template" value="table" />
                 
                 <div className="grid gap-2">
-                  <label className="text-sm uppercase tracking-wide text-gray-400" htmlFor="name">Name & Surname *</label>
-                  <input id="name" name="name" type="text" required value={formData.name} onChange={handleChange} className="w-full rounded-lg border border-white/20 bg-black/30 px-4 py-2.5 text-gray-100 focus:border-[#8cc63f] focus:outline-none" placeholder="Your full name" />
+                  <label className="text-sm uppercase tracking-wide text-gray-400">Name & Surname *</label>
+                  <input name="name" type="text" required value={formData.name} onChange={handleChange} className="w-full rounded-lg border border-white/20 bg-black/30 px-4 py-2.5 text-gray-100 focus:border-[#8cc63f]" placeholder="Your full name" />
                 </div>
 
                 <div className="grid gap-2">
-                  <label className="text-sm uppercase tracking-wide text-gray-400" htmlFor="email">Email address *</label>
-                  <input id="email" name="email" type="email" required value={formData.email} onChange={handleChange} className="w-full rounded-lg border border-white/20 bg-black/30 px-4 py-2.5 text-gray-100 focus:border-[#8cc63f] focus:outline-none" placeholder="you@example.com" />
+                  <label className="text-sm uppercase tracking-wide text-gray-400">Email address *</label>
+                  <input name="email" type="email" required value={formData.email} onChange={handleChange} className="w-full rounded-lg border border-white/20 bg-black/30 px-4 py-2.5 text-gray-100 focus:border-[#8cc63f]" placeholder="you@example.com" />
                 </div>
 
                 {isPartnerForm && (
                   <>
                     <div className="grid gap-2">
-                      <label className="text-sm uppercase tracking-wide text-gray-400" htmlFor="business">Business name *</label>
-                      <input id="business" name="business" type="text" required value={formData.business} onChange={handleChange} className="w-full rounded-lg border border-white/20 bg-black/30 px-4 py-2.5 text-gray-100 focus:border-[#8cc63f] focus:outline-none" placeholder="Your business name" />
+                      <label className="text-sm uppercase tracking-wide text-gray-400">Business name *</label>
+                      <input name="business" type="text" required value={formData.business} onChange={handleChange} className="w-full rounded-lg border border-white/20 bg-black/30 px-4 py-2.5 text-gray-100 focus:border-[#8cc63f]" placeholder="Your business name" />
                     </div>
 
                     <div className="grid gap-2">
-                      <label className="text-sm uppercase tracking-wide text-gray-400" htmlFor="phone">Phone number (optional)</label>
-                      <input id="phone" name="phone" type="tel" value={formData.phone} onChange={handleChange} className="w-full rounded-lg border border-white/20 bg-black/30 px-4 py-2.5 text-gray-100 focus:border-[#8cc63f] focus:outline-none" placeholder="+352 ..." />
+                      <label className="text-sm uppercase tracking-wide text-gray-400">Phone number (optional)</label>
+                      <input name="phone" type="tel" value={formData.phone} onChange={handleChange} className="w-full rounded-lg border border-white/20 bg-black/30 px-4 py-2.5 text-gray-100 focus:border-[#8cc63f]" placeholder="+352 ..." />
                     </div>
                   </>
                 )}
 
                 <div className="grid gap-2">
-                  <label className="text-sm uppercase tracking-wide text-gray-400" htmlFor="message">Message *</label>
-                  <textarea id="message" name="message" rows="4" required value={formData.message} onChange={handleChange} className="w-full rounded-lg border border-white/20 bg-black/30 px-4 py-2.5 text-gray-100 focus:border-[#8cc63f] focus:outline-none" placeholder={isPartnerForm ? "Tell us about your business and why you'd like to partner with us..." : "How can we help you?"} />
+                  <label className="text-sm uppercase tracking-wide text-gray-400">Message *</label>
+                  <textarea name="message" rows="4" required value={formData.message} onChange={handleChange} className="w-full rounded-lg border border-white/20 bg-black/30 px-4 py-2.5 text-gray-100 focus:border-[#8cc63f]" placeholder={isPartnerForm ? "Tell us about your business..." : "How can we help you?"} />
                 </div>
 
-                <button type="submit" disabled={isSubmitting} className="mt-2 w-full inline-flex justify-center rounded-lg bg-gradient-to-r from-[#8cc63f] via-[#58b0d8] to-[#1b75bb] px-4 py-2.5 text-sm font-semibold text-[#04120c] shadow-[0_15px_35px_rgba(20,90,120,0.35)] transition hover:scale-[1.01] active:scale-[0.99] disabled:opacity-50 disabled:cursor-not-allowed">
+                <button type="submit" disabled={isSubmitting} className="mt-2 w-full rounded-lg bg-gradient-to-r from-[#8cc63f] via-[#58b0d8] to-[#1b75bb] px-4 py-2.5 text-sm font-semibold text-[#04120c] shadow-lg disabled:opacity-50">
                   {isSubmitting ? 'Sending...' : 'Send Message'}
                 </button>
                 
@@ -414,166 +668,7 @@
         );
       }
 
-      // Partners List Modal (NEW)
-      function PartnersListModal({ onClose }) {
-        return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <div className="absolute inset-0 bg-black/70" onClick={onClose}></div>
-            <div className="relative z-10 w-full max-w-2xl rounded-2xl border border-white/10 bg-neutral-900/95 p-6 shadow-xl max-h-[90vh] overflow-y-auto modal-enter">
-              <div className="flex items-start justify-between mb-4">
-                <h2 className="text-xl sm:text-2xl font-semibold text-white">Our partners</h2>
-                <button onClick={onClose} className="text-gray-400 hover:text-gray-200 text-2xl p-2 -m-2">&times;</button>
-              </div>
-              <div className="grid gap-4 sm:grid-cols-2">
-                {partners.map((p, idx) => (
-                  <div key={idx} className="rounded-xl border border-white/10 bg-white/5 p-4 hover:border-[#8cc63f]/40 transition">
-                    <h3 className="text-lg font-semibold" style={{ color: p.color }}>{p.name}</h3>
-                    <p className="text-sm text-gray-300 mt-1">{p.desc}</p>
-                    <p className="text-xs text-gray-400 mt-2">⏰ {p.hours}</p>
-                    <div className="mt-2 inline-block rounded-full border px-3 py-0.5 text-xs" style={{ borderColor: p.color+'55', color: p.color }}>{p.discount}</div>
-                  </div>
-                ))}
-              </div>
-              <p className="text-center text-gray-400 text-sm mt-6">➕ more partners coming soon</p>
-            </div>
-          </div>
-        );
-      }
-
-      // How It Works Modal (NEW)
-      function HowItWorksModal({ onClose }) {
-        return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <div className="absolute inset-0 bg-black/70" onClick={onClose}></div>
-            <div className="relative z-10 w-full max-w-2xl rounded-2xl border border-white/10 bg-neutral-900/95 p-6 sm:p-8 shadow-xl max-h-[90vh] overflow-y-auto modal-enter">
-              <div className="flex items-start justify-between mb-4">
-                <h2 className="text-xl sm:text-2xl font-semibold text-white">How it works</h2>
-                <button onClick={onClose} className="text-gray-400 hover:text-gray-200 transition text-2xl leading-none p-2 -m-2">&times;</button>
-              </div>
-              
-              <div className="space-y-6 text-gray-200">
-                <div className="flex items-start gap-4">
-                  <div className="flex h-8 w-8 sm:h-10 sm:w-10 shrink-0 items-center justify-center rounded-full bg-[#8cc63f]/20 text-[#8cc63f] font-bold text-lg">1</div>
-                  <div>
-                    <h3 className="text-lg font-semibold text-white mb-1">Sign up for €9.99/month</h3>
-                    <p className="text-sm sm:text-base text-gray-300">Create your account in seconds. No hidden fees, cancel anytime.</p>
-                  </div>
-                </div>
-                
-                <div className="flex items-start gap-4">
-                  <div className="flex h-8 w-8 sm:h-10 sm:w-10 shrink-0 items-center justify-center rounded-full bg-[#1b75bb]/20 text-[#1b75bb] font-bold text-lg">2</div>
-                  <div>
-                    <h3 className="text-lg font-semibold text-white mb-1">Get your digital membership</h3>
-                    <p className="text-sm sm:text-base text-gray-300">After payment, you'll receive a unique QR code via email and in your account dashboard.</p>
-                  </div>
-                </div>
-                
-                <div className="flex items-start gap-4">
-                  <div className="flex h-8 w-8 sm:h-10 sm:w-10 shrink-0 items-center justify-center rounded-full bg-[#8cc63f]/20 text-[#8cc63f] font-bold text-lg">3</div>
-                  <div>
-                    <h3 className="text-lg font-semibold text-white mb-1">Show & save at partners</h3>
-                    <p className="text-sm sm:text-base text-gray-300">Present your QR code at any partner gym, studio or shop to get your exclusive discount instantly.</p>
-                  </div>
-                </div>
-
-                <div className="mt-6 rounded-xl border border-white/10 bg-white/5 p-4">
-                  <h4 className="font-medium text-[#8cc63f] mb-2">Example benefits:</h4>
-                  <ul className="list-disc pl-5 space-y-1 text-sm text-gray-300">
-                    <li>Factory 4: from 125€ → 105€ / month + reduced activation fee</li>
-                    <li>Elysium: discounts on memberships and classes (coming soon)</li>
-                    <li>10% off BioGuster, 15% off YogaLoft</li>
-                  </ul>
-                </div>
-                
-                <p className="text-sm italic text-gray-400">One membership, one QR code — your passport to a healthier Luxembourg.</p>
-              </div>
-              
-              <div className="mt-8 flex justify-end">
-                <button onClick={onClose} className="rounded-lg bg-gradient-to-r from-[#8cc63f] via-[#58b0d8] to-[#1b75bb] px-6 py-2 text-sm font-semibold text-[#04120c]">Got it</button>
-              </div>
-            </div>
-          </div>
-        );
-      }
-
-      // Dashboard Modal (NEW)
-      function DashboardModal({ user, onClose }) {
-        const [member, setMember] = useState(false);
-        const [savings, setSavings] = useState(0);
-        
-        useEffect(() => {
-          if (!user) return;
-          const key = `hl-member-${user.email}`;
-          const isMem = localStorage.getItem(key) === 'true';
-          setMember(isMem);
-          if (isMem) {
-            const saved = localStorage.getItem(`hl-savings-${user.email}`);
-            if (saved) setSavings(parseInt(saved,10));
-            else { 
-              const mock = Math.floor(Math.random() * 45) + 24; 
-              localStorage.setItem(`hl-savings-${user.email}`, mock); 
-              setSavings(mock); 
-            }
-          } else setSavings(0);
-        }, [user]);
-        
-        const handlePurchase = () => {
-          if (!user) return;
-          localStorage.setItem(`hl-member-${user.email}`, 'true');
-          localStorage.setItem(`hl-savings-${user.email}`, '32');
-          setMember(true); 
-          setSavings(32);
-        };
-        
-        return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <div className="absolute inset-0 bg-black/70" onClick={onClose}></div>
-            <div className="relative z-10 w-full max-w-md rounded-2xl border border-white/10 bg-neutral-900/95 p-6 shadow-xl modal-enter">
-              <div className="flex items-start justify-between mb-4">
-                <h2 className="text-xl font-semibold text-white">My dashboard</h2>
-                <button onClick={onClose} className="text-gray-400 hover:text-gray-200 text-2xl p-2 -m-2">&times;</button>
-              </div>
-              {user && (
-                <div className="space-y-5">
-                  <div className="pb-3 border-b border-white/10">
-                    <p className="text-sm text-gray-400">Welcome back,</p>
-                    <p className="text-xl font-medium text-white">{user.name}</p>
-                    <p className="text-xs text-gray-500">{user.email}</p>
-                  </div>
-
-                  <div className={`flex items-center justify-between p-4 rounded-xl border ${member ? 'border-[#8cc63f]/30 glow-green' : 'border-red-500/30 glow-red'} bg-white/5`}>
-                    <div>
-                      <p className="text-sm text-gray-400">Membership</p>
-                      <p className="text-lg font-semibold flex items-center gap-2">
-                        {member ? 'Active' : 'Inactive'}
-                        <span className={`inline-block h-3 w-3 rounded-full ${member ? 'bg-[#8cc63f] animate-pulse' : 'bg-red-500'}`}></span>
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-sm text-gray-400">Total saved</p>
-                      <p className="text-2xl font-bold text-[#8cc63f]">€ {savings}</p>
-                    </div>
-                  </div>
-
-                  {!member && (
-                    <button onClick={handlePurchase} className="w-full rounded-lg bg-gradient-to-r from-[#8cc63f] to-[#1b75bb] px-4 py-3 font-semibold text-[#04120c]">
-                      Join now – €9.99/month
-                    </button>
-                  )}
-
-                  {member && (
-                    <div className="p-3 bg-white/5 rounded-lg text-sm text-gray-300 border border-white/10">
-                      <span className="text-[#8cc63f] font-medium">✔ Member perk:</span> Show your QR code at any partner. (QR preview coming soon)
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
-        );
-      }
-
-      // Auth Modal (original)
+      // Auth Modal
       function AuthModal({ mode, onClose, onSubmit, onSwitchMode, error, successMessage }) {
         const isRegister = mode === 'register';
         const [form, setForm] = useState({ name: '', email: '', password: '' });
@@ -582,13 +677,13 @@
           setForm({ name: '', email: '', password: '' });
         }, [mode]);
 
-        const handleChange = (event) => {
-          const { name, value } = event.target;
-          setForm((prev) => ({ ...prev, [name]: value }));
+        const handleChange = (e) => {
+          const { name, value } = e.target;
+          setForm(prev => ({ ...prev, [name]: value }));
         };
 
-        const handleSubmit = (event) => {
-          event.preventDefault();
+        const handleSubmit = (e) => {
+          e.preventDefault();
           onSubmit(mode, form);
         };
 
@@ -600,11 +695,11 @@
                 <h2 className="text-xl sm:text-2xl font-semibold text-white">
                   {isRegister ? 'Create account' : 'Log in'}
                 </h2>
-                <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-200 transition text-2xl leading-none p-2 -m-2">&times;</button>
+                <button onClick={onClose} className="text-gray-400 hover:text-gray-200 text-2xl p-2 -m-2">&times;</button>
               </div>
 
               {successMessage && (
-                <div className="mb-4 p-3 bg-green-500/20 border border-green-500/50 rounded-lg text-green-400 text-center">
+                <div className="mb-4 p-3 bg-green-500/20 border border-green-500/50 rounded-lg text-green-400">
                   {successMessage}
                 </div>
               )}
@@ -612,32 +707,32 @@
               <form className="grid gap-4" onSubmit={handleSubmit}>
                 {isRegister && (
                   <div className="grid gap-2">
-                    <label className="text-sm uppercase tracking-wide text-gray-400" htmlFor="auth-name">Full name</label>
-                    <input id="auth-name" name="name" type="text" required placeholder="Your name" value={form.name} onChange={handleChange} className="w-full rounded-lg border border-white/20 bg-black/30 px-4 py-2.5 text-gray-100 focus:border-[#8cc63f] focus:outline-none" />
+                    <label className="text-sm uppercase tracking-wide text-gray-400">Full name</label>
+                    <input name="name" type="text" required placeholder="Your name" value={form.name} onChange={handleChange} className="w-full rounded-lg border border-white/20 bg-black/30 px-4 py-2.5 text-gray-100 focus:border-[#8cc63f]" />
                   </div>
                 )}
 
                 <div className="grid gap-2">
-                  <label className="text-sm uppercase tracking-wide text-gray-400" htmlFor="auth-email">Email</label>
-                  <input id="auth-email" name="email" type="email" required placeholder="you@example.com" value={form.email} onChange={handleChange} className="w-full rounded-lg border border-white/20 bg-black/30 px-4 py-2.5 text-gray-100 focus:border-[#8cc63f] focus:outline-none" />
+                  <label className="text-sm uppercase tracking-wide text-gray-400">Email</label>
+                  <input name="email" type="email" required placeholder="you@example.com" value={form.email} onChange={handleChange} className="w-full rounded-lg border border-white/20 bg-black/30 px-4 py-2.5 text-gray-100 focus:border-[#8cc63f]" />
                 </div>
 
                 <div className="grid gap-2">
-                  <label className="text-sm uppercase tracking-wide text-gray-400" htmlFor="auth-password">Password</label>
-                  <input id="auth-password" name="password" type="password" required placeholder={isRegister ? 'Create a password (min. 4 characters)' : 'Enter your password'} value={form.password} onChange={handleChange} className="w-full rounded-lg border border-white/20 bg-black/30 px-4 py-2.5 text-gray-100 focus:border-[#8cc63f] focus:outline-none" />
+                  <label className="text-sm uppercase tracking-wide text-gray-400">Password</label>
+                  <input name="password" type="password" required placeholder={isRegister ? 'min. 4 characters' : 'Your password'} value={form.password} onChange={handleChange} className="w-full rounded-lg border border-white/20 bg-black/30 px-4 py-2.5 text-gray-100 focus:border-[#8cc63f]" />
                 </div>
 
                 {error && <p className="text-sm text-red-400">{error}</p>}
 
-                <button type="submit" className="mt-2 w-full inline-flex justify-center rounded-lg bg-gradient-to-r from-[#8cc63f] via-[#58b0d8] to-[#1b75bb] px-4 py-2.5 text-sm font-semibold text-[#04120c] shadow-[0_15px_35px_rgba(20,90,120,0.35)] transition hover:scale-[1.01] active:scale-[0.99]">
+                <button type="submit" className="mt-2 w-full rounded-lg bg-gradient-to-r from-[#8cc63f] via-[#58b0d8] to-[#1b75bb] px-4 py-2.5 text-sm font-semibold text-[#04120c] shadow-lg">
                   {isRegister ? 'Create account' : 'Log in'}
                 </button>
               </form>
 
               <p className="mt-4 text-sm text-gray-300 text-center">
-                {isRegister ? 'Already have an account?' : 'New to Healthy Luxembourg?'}{' '}
-                <button type="button" className="text-[#8cc63f] hover:underline" onClick={() => onSwitchMode(isRegister ? 'login' : 'register')}>
-                  {isRegister ? 'Log in instead' : 'Create an account'}
+                {isRegister ? 'Already have an account?' : 'New here?'}{' '}
+                <button className="text-[#8cc63f] hover:underline" onClick={() => onSwitchMode(isRegister ? 'login' : 'register')}>
+                  {isRegister ? 'Log in' : 'Create account'}
                 </button>
               </p>
             </div>
@@ -645,7 +740,86 @@
         );
       }
 
-      // Dropdown component (original)
+      // Dashboard Modal (updated with Stripe)
+      function DashboardModal({ user, onClose }) {
+        const [member, setMember] = useState(false);
+        const [savings, setSavings] = useState(0);
+        const [showPayment, setShowPayment] = useState(false);
+        
+        useEffect(() => {
+          if (!user) return;
+          setMember(checkMembership(user.email));
+          const saved = localStorage.getItem(`hl-savings-${user.email}`);
+          setSavings(saved ? parseInt(saved, 10) : 0);
+        }, [user]);
+
+        const handlePaymentSuccess = () => {
+          setMember(true);
+          // Show success message or update UI
+        };
+
+        return (
+          <>
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+              <div className="absolute inset-0 bg-black/70" onClick={onClose}></div>
+              <div className="relative z-10 w-full max-w-md rounded-2xl border border-white/10 bg-neutral-900/95 p-6 shadow-xl modal-enter">
+                <div className="flex items-start justify-between mb-4">
+                  <h2 className="text-xl font-semibold text-white">My dashboard</h2>
+                  <button onClick={onClose} className="text-gray-400 hover:text-gray-200 text-2xl p-2 -m-2">&times;</button>
+                </div>
+                {user && (
+                  <div className="space-y-5">
+                    <div className="pb-3 border-b border-white/10">
+                      <p className="text-sm text-gray-400">Welcome back,</p>
+                      <p className="text-xl font-medium text-white">{user.name}</p>
+                      <p className="text-xs text-gray-500">{user.email}</p>
+                    </div>
+
+                    <div className={`flex items-center justify-between p-4 rounded-xl border ${member ? 'border-[#8cc63f]/30 glow-green' : 'border-red-500/30 glow-red'} bg-white/5`}>
+                      <div>
+                        <p className="text-sm text-gray-400">Membership</p>
+                        <p className="text-lg font-semibold flex items-center gap-2">
+                          {member ? 'Active' : 'Inactive'}
+                          <span className={`inline-block h-3 w-3 rounded-full ${member ? 'bg-[#8cc63f] animate-pulse' : 'bg-red-500'}`}></span>
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-sm text-gray-400">Total saved</p>
+                        <p className="text-2xl font-bold text-[#8cc63f]">€ {savings}</p>
+                      </div>
+                    </div>
+
+                    {!member && (
+                      <button 
+                        onClick={() => setShowPayment(true)} 
+                        className="w-full rounded-lg bg-gradient-to-r from-[#8cc63f] to-[#1b75bb] px-4 py-3 font-semibold text-[#04120c]"
+                      >
+                        Join now – €9.99/month
+                      </button>
+                    )}
+
+                    {member && (
+                      <div className="p-3 bg-white/5 rounded-lg text-sm text-gray-300 border border-white/10">
+                        <span className="text-[#8cc63f] font-medium">✔ Member perk:</span> Show your QR code at any partner. (QR preview coming soon)
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {showPayment && (
+              <StripePaymentModal 
+                user={user} 
+                onClose={() => setShowPayment(false)}
+                onSuccess={handlePaymentSuccess}
+              />
+            )}
+          </>
+        );
+      }
+
+      // Dropdown component
       function Dropdown({ label, items = [] }) {
         const [open, setOpen] = useState(false);
         useEffect(() => {
@@ -664,11 +838,11 @@
 
         return (
           <div id="dropdown-anchor" className="relative select-none">
-            <button onClick={() => setOpen((prev) => !prev)} className="py-2 px-3 text-sm text-white/70 transition hover:text-white whitespace-nowrap">
+            <button onClick={() => setOpen(!open)} className="py-2 px-3 text-sm text-white/70 hover:text-white whitespace-nowrap">
               {label}
             </button>
             {open && (
-              <div className="absolute z-30 mt-2 min-w-[12rem] rounded-lg border border-white/10 bg-[#0f1d18]/95 p-1 text-gray-100 shadow-[0_18px_45px_rgba(6,18,14,0.4)] right-0 sm:right-auto">
+              <div className="absolute z-30 mt-2 min-w-[12rem] rounded-lg border border-white/10 bg-[#0f1d18]/95 p-1 text-gray-100 shadow-lg right-0 sm:right-auto">
                 {normalizedItems.map((item, idx) => {
                   const handleClick = (event) => {
                     if (typeof item.onSelect === 'function') {
@@ -678,7 +852,7 @@
                     setOpen(false);
                   };
                   return (
-                    <a key={idx} href={item.href} className="block cursor-pointer rounded-md px-3 py-2 text-sm text-white/70 transition hover:bg-white/10 hover:text-white" onClick={handleClick}>
+                    <a key={idx} href={item.href} className="block cursor-pointer rounded-md px-3 py-2 text-sm text-white/70 hover:bg-white/10 hover:text-white" onClick={handleClick}>
                       {item.label}
                     </a>
                   );
@@ -689,7 +863,7 @@
         );
       }
 
-      // ==================== MAIN APP COMPONENT ====================
+      // ==================== MAIN APP ====================
       function App() {
         const [language, setLanguage] = useState(() => localStorage.getItem('hl-lang') || 'en');
         const [user, setUser] = useState(getStoredUser);
@@ -698,8 +872,6 @@
         const [authSuccess, setAuthSuccess] = useState('');
         const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
         const [contactFormType, setContactFormType] = useState(null);
-        
-        // NEW STATES
         const [howItWorksOpen, setHowItWorksOpen] = useState(false);
         const [partnersListOpen, setPartnersListOpen] = useState(false);
         const [dashboardOpen, setDashboardOpen] = useState(false);
@@ -724,13 +896,11 @@
           setContactFormType(null);
         };
 
-        // NEW: open how it works modal
         const openHowItWorks = () => {
           setHowItWorksOpen(true);
           setMobileMenuOpen(false);
         };
 
-        // NEW: open partners list modal
         const openPartnersList = () => {
           setPartnersListOpen(true);
           setMobileMenuOpen(false);
@@ -763,8 +933,7 @@
               reply_to: "healthyluxembourg.contact@gmail.com"
             };
 
-            const response = await emailjs.send(serviceId, templateId, templateParams, publicKey);
-            console.log('Welcome email sent successfully!', response.status, response.text);
+            await emailjs.send(serviceId, templateId, templateParams, publicKey);
             return true;
           } catch (error) {
             console.error('Failed to send welcome email:', error);
@@ -776,14 +945,7 @@
           setAuthError('');
           setAuthSuccess('');
           
-          let existingUsers = [];
-          try {
-            const usersRaw = localStorage.getItem('hl-users');
-            existingUsers = usersRaw ? JSON.parse(usersRaw) : [];
-          } catch (error) {
-            console.warn('Failed to parse stored users', error);
-            existingUsers = [];
-          }
+          let existingUsers = getAllUsers();
           
           const email = (formData.email || '').trim().toLowerCase();
           const password = (formData.password || '').trim();
@@ -801,12 +963,8 @@
               return;
             }
             
-            try {
-              localStorage.setItem('hl-current-user-email', foundUser.email);
-              localStorage.setItem(AUTH_KEY, 'true');
-            } catch (error) {
-              console.warn('Failed to persist user', error);
-            }
+            localStorage.setItem('hl-current-user-email', foundUser.email);
+            localStorage.setItem(AUTH_KEY, 'true');
             
             setUser(foundUser);
             closeAuthModal();
@@ -838,29 +996,19 @@
             createdAt: new Date().toISOString()
           };
           
-          try {
-            existingUsers.push(newUser);
-            localStorage.setItem('hl-users', JSON.stringify(existingUsers));
-            
-            await sendWelcomeEmail(newUser.name, newUser.email);
-            
-            setAuthSuccess('Account created successfully! Please check your email for a welcome message and then log in with your credentials.');
-            setAuthMode('login');
-            
-          } catch (error) {
-            console.warn('Failed to store new user', error);
-            setAuthError('Failed to create account. Please try again.');
-          }
+          existingUsers.push(newUser);
+          localStorage.setItem('hl-users', JSON.stringify(existingUsers));
+          
+          await sendWelcomeEmail(newUser.name, newUser.email);
+          
+          setAuthSuccess('Account created successfully! Please check your email for a welcome message and then log in with your credentials.');
+          setAuthMode('login');
         };
 
         const handleLogout = () => {
           setUser(null);
-          try {
-            localStorage.removeItem('hl-current-user-email');
-            localStorage.setItem(AUTH_KEY, 'false');
-          } catch (error) {
-            console.warn('Failed to clear auth flag', error);
-          }
+          localStorage.removeItem('hl-current-user-email');
+          localStorage.setItem(AUTH_KEY, 'false');
         };
 
         const t = translations[language] || translations.en;
@@ -869,14 +1017,12 @@
           openAuthModal('register');
         };
 
-        // Remove the old goToPartnersPage function since we now use modal
-
         return (
           <div className="min-h-screen flex flex-col items-center">
-            <nav className="sticky top-0 z-30 w-full border-b border-white/10 bg-[#0b1512]/80 backdrop-blur supports-[backdrop-filter]:bg-[#0b1512]/60">
+            <nav className="sticky top-0 z-30 w-full border-b border-white/10 bg-[#0b1512]/80 backdrop-blur">
               <div className="container-max mx-auto flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4">
-                <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
-                  <img src={HERO_IMAGE_SRC} alt="Healthy Luxembourg logo" className="h-14 sm:h-20 md:h-24 w-auto drop-shadow-[0_8px_30px_rgba(27,117,187,0.35)]" />
+                <div className="flex items-center gap-2 sm:gap-3">
+                  <img src={HERO_IMAGE_SRC} alt="Healthy Luxembourg logo" className="h-14 sm:h-20 md:h-24 w-auto" />
                   <span className="text-base sm:text-lg font-semibold text-white whitespace-nowrap">
                     <span className="mr-1 font-black text-[#8cc63f]">Healthy</span>
                     <span className="hidden xs:inline">Luxembourg</span>
@@ -889,32 +1035,26 @@
                   <Dropdown
                     label={t.nav.merchants}
                     items={[
-                      {
-                        label: 'Become partner',
-                        onSelect: () => openContactForm('partner'),
-                      },
-                      {
-                        label: 'List of partners',
-                        onSelect: openPartnersList,  // UPDATED - opens modal instead of page
-                      },
+                      { label: 'Become partner', onSelect: () => openContactForm('partner') },
+                      { label: 'List of partners', onSelect: openPartnersList },
                     ]}
                   />
-                  <button onClick={() => scrollToSection('about-section')} className="transition hover:text-white px-2 py-2">{t.nav.about}</button>
-                  <button onClick={() => openContactForm('contact')} className="transition hover:text-white px-2 py-2">{t.nav.contact}</button>
-                  <button onClick={openHowItWorks} className="transition hover:text-white px-2 py-2">{t.nav.how}</button>
+                  <button onClick={() => scrollToSection('about-section')} className="hover:text-white px-2 py-2">{t.nav.about}</button>
+                  <button onClick={() => openContactForm('contact')} className="hover:text-white px-2 py-2">{t.nav.contact}</button>
+                  <button onClick={openHowItWorks} className="hover:text-white px-2 py-2">{t.nav.how}</button>
                 </div>
 
                 <div className="flex items-center gap-1 sm:gap-2 md:gap-3">
                   <Dropdown
                     label={language === 'lb' ? 'LU' : language.toUpperCase()}
-                    items={languages.map((code) => ({
+                    items={languages.map(code => ({
                       label: code === 'lb' ? 'LU' : code.toUpperCase(),
                       onSelect: () => setLanguage(code),
                     }))}
                   />
                   
                   {/* Mobile menu button */}
-                  <button onClick={() => setMobileMenuOpen(!mobileMenuOpen)} className="lg:hidden p-2 text-white/70 hover:text-white" aria-label="Toggle menu">
+                  <button onClick={() => setMobileMenuOpen(!mobileMenuOpen)} className="lg:hidden p-2 text-white/70 hover:text-white">
                     <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       {mobileMenuOpen ? (
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -928,19 +1068,19 @@
                   <div className="hidden md:flex items-center gap-2">
                     {user ? (
                       <>
-                        <button onClick={() => setDashboardOpen(true)} className="rounded-full border border-[#8cc63f]/60 bg-[#8cc63f]/10 px-3 py-1.5 text-xs font-medium text-[#8cc63f] transition hover:bg-[#8cc63f]/20 whitespace-nowrap">
+                        <button onClick={() => setDashboardOpen(true)} className="rounded-full border border-[#8cc63f]/60 bg-[#8cc63f]/10 px-3 py-1.5 text-xs font-medium text-[#8cc63f] hover:bg-[#8cc63f]/20 whitespace-nowrap">
                           {t.account}: {user.name.split(' ')[0]}
                         </button>
-                        <button onClick={handleLogout} className="rounded-full border border-white/20 bg-transparent px-3 py-1.5 text-xs font-medium text-white/70 transition hover:border-white/40 hover:text-white whitespace-nowrap">
+                        <button onClick={handleLogout} className="rounded-full border border-white/20 bg-transparent px-3 py-1.5 text-xs font-medium text-white/70 hover:border-white/40 hover:text-white whitespace-nowrap">
                           {t.logout}
                         </button>
                       </>
                     ) : (
                       <>
-                        <button onClick={() => openAuthModal('login')} className="rounded-full border border-white/20 bg-transparent px-3 py-1.5 text-xs font-medium text-white/70 transition hover:border-white/40 hover:text-white whitespace-nowrap">
+                        <button onClick={() => openAuthModal('login')} className="rounded-full border border-white/20 bg-transparent px-3 py-1.5 text-xs font-medium text-white/70 hover:border-white/40 hover:text-white whitespace-nowrap">
                           {t.login}
                         </button>
-                        <button onClick={() => openAuthModal('register')} className="rounded-full bg-gradient-to-r from-[#8cc63f] via-[#58b0d8] to-[#1b75bb] px-3 py-1.5 text-xs font-semibold text-[#04120c] shadow-[0_15px_35px_rgba(18,85,118,0.4)] transition hover:scale-[1.03] active:scale-[0.98] whitespace-nowrap">
+                        <button onClick={() => openAuthModal('register')} className="rounded-full bg-gradient-to-r from-[#8cc63f] via-[#58b0d8] to-[#1b75bb] px-3 py-1.5 text-xs font-semibold text-[#04120c] shadow-lg hover:scale-[1.03] whitespace-nowrap">
                           {t.register}
                         </button>
                       </>
@@ -956,38 +1096,20 @@
                     <Dropdown
                       label={t.nav.merchants}
                       items={[
-                        {
-                          label: 'Become partner',
-                          onSelect: () => {
-                            openContactForm('partner');
-                            setMobileMenuOpen(false);
-                          },
-                        },
-                        {
-                          label: 'List of partners',
-                          onSelect: () => {
-                            openPartnersList();
-                            setMobileMenuOpen(false);
-                          },
-                        },
+                        { label: 'Become partner', onSelect: () => { openContactForm('partner'); setMobileMenuOpen(false); } },
+                        { label: 'List of partners', onSelect: () => { openPartnersList(); setMobileMenuOpen(false); } },
                       ]}
                     />
                     <button onClick={() => scrollToSection('about-section')} className="py-3 text-left text-white/70 hover:text-white">About</button>
-                    <button onClick={() => {
-                      openContactForm('contact');
-                      setMobileMenuOpen(false);
-                    }} className="py-3 text-left text-white/70 hover:text-white">Contact</button>
-                    <button onClick={() => {
-                      openHowItWorks();
-                      setMobileMenuOpen(false);
-                    }} className="py-3 text-left text-white/70 hover:text-white">How it works</button>
+                    <button onClick={() => { openContactForm('contact'); setMobileMenuOpen(false); }} className="py-3 text-left text-white/70 hover:text-white">Contact</button>
+                    <button onClick={() => { openHowItWorks(); setMobileMenuOpen(false); }} className="py-3 text-left text-white/70 hover:text-white">How it works</button>
                     
                     {/* Mobile auth buttons */}
                     <div className="flex flex-col gap-2 pt-4 border-t border-white/10">
                       {user ? (
                         <>
                           <button onClick={() => { setDashboardOpen(true); setMobileMenuOpen(false); }} className="w-full rounded-full border border-[#8cc63f]/60 bg-[#8cc63f]/10 px-4 py-3 text-sm font-medium text-[#8cc63f]">
-                            {t.account}: {user.name.split(' ')[0]}
+                            {t.account}
                           </button>
                           <button onClick={() => { handleLogout(); setMobileMenuOpen(false); }} className="w-full rounded-full border border-white/20 bg-transparent px-4 py-3 text-sm font-medium text-white/70">
                             {t.logout}
@@ -1027,7 +1149,7 @@
                         {t.intro}
                       </p>
                       <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-                        <button onClick={handleJoin} className="w-full sm:w-auto inline-flex items-center justify-center rounded-full bg-gradient-to-r from-[#8cc63f] via-[#58b0d8] to-[#1b75bb] px-6 sm:px-8 py-3 text-base sm:text-lg font-semibold text-[#04120c] shadow-[0_25px_45px_rgba(15,70,110,0.45)] transition hover:scale-[1.02] active:scale-[0.98]">
+                        <button onClick={handleJoin} className="w-full sm:w-auto inline-flex items-center justify-center rounded-full bg-gradient-to-r from-[#8cc63f] via-[#58b0d8] to-[#1b75bb] px-6 sm:px-8 py-3 text-base sm:text-lg font-semibold text-[#04120c] shadow-lg hover:scale-[1.02]">
                           {t.join}
                         </button>
                         <div className="flex items-center gap-3 text-sm text-gray-300">
@@ -1042,17 +1164,17 @@
                     </div>
                     <div className="relative min-h-[200px] sm:min-h-[360px] flex items-center justify-center lg:justify-end">
                       <div className="pointer-events-none">
-                        <img src={HERO_IMAGE_SRC} alt="Healthy Luxembourg logo background" className="h-[180px] sm:h-[280px] md:h-[350px] lg:h-[420px] w-auto max-w-[90vw] opacity-16 sm:opacity-20 drop-shadow-[0_30px_70px_rgba(7,20,16,0.45)]" />
+                        <img src={HERO_IMAGE_SRC} alt="Healthy Luxembourg logo background" className="h-[180px] sm:h-[280px] md:h-[350px] lg:h-[420px] w-auto max-w-[90vw] opacity-16 sm:opacity-20" />
                       </div>
                     </div>
                   </div>
 
-                  {/* Partners preview section */}
+                  {/* Partners preview */}
                   <div className="mt-16 sm:mt-20 scroll-mt-32" id="partners">
                     <h2 className="text-center text-xs sm:text-sm font-semibold uppercase tracking-[0.25em] sm:tracking-[0.35em] text-[#8cc63f]">{t.partners}</h2>
                     <div className="mt-6 sm:mt-8 mx-auto grid max-w-4xl grid-cols-1 sm:grid-cols-2 justify-items-center gap-4 sm:gap-6">
                       {partners.slice(0,2).map((partner, index) => (
-                        <div key={index} className="relative w-full overflow-hidden rounded-xl sm:rounded-2xl border border-white/10 bg-[#0f1d18]/80 p-4 sm:p-6 shadow-[0_20px_45px_rgba(7,20,16,0.4)] transition hover:-translate-y-1 hover:border-[#8cc63f]/40">
+                        <div key={index} className="relative w-full overflow-hidden rounded-xl sm:rounded-2xl border border-white/10 bg-[#0f1d18]/80 p-4 sm:p-6 shadow-lg hover:-translate-y-1 hover:border-[#8cc63f]/40">
                           <div className="flex items-start gap-3 sm:gap-4">
                             <div className="flex h-10 w-10 sm:h-12 sm:w-12 flex-shrink-0 items-center justify-center rounded-xl sm:rounded-2xl border bg-white/5" style={{ borderColor: `${partner.color}55`, background: `linear-gradient(135deg, ${partner.color}1a 0%, rgba(9,22,18,0.8) 100%)` }}>
                               {renderPartnerIcon(partner.icon, partner.color)}
@@ -1075,13 +1197,13 @@
                     </div>
                   </div>
 
-                  {/* About section / Team */}
-                  <div className="mt-16 sm:mt-24 rounded-2xl sm:rounded-3xl border border-white/10 bg-[#0f1d19]/70 p-6 sm:p-8 md:p-12 shadow-[0_25px_60px_rgba(7,20,16,0.4)]" id="about-section">
+                  {/* Team section */}
+                  <div className="mt-16 sm:mt-24 rounded-2xl sm:rounded-3xl border border-white/10 bg-[#0f1d19]/70 p-6 sm:p-8 md:p-12 shadow-lg" id="about-section">
                     <div className="flex flex-col gap-4 sm:gap-6 md:flex-row md:items-end md:justify-between">
                       <div>
                         <h2 className="text-2xl sm:text-3xl md:text-4xl font-semibold text-white">{t.team}</h2>
                         <p className="mt-1 sm:mt-2 text-xs sm:text-sm text-gray-300">
-                          {(t.teamIntro || 'Students from Lycee ECG building a healthier Luxembourg.')}
+                          {t.teamIntro}
                         </p>
                       </div>
                       <div className="flex items-center gap-3 text-xs uppercase tracking-[0.25em] sm:tracking-[0.35em] text-white/50">
@@ -1091,18 +1213,10 @@
                     </div>
                     <div className="mt-8 sm:mt-10 grid gap-4 sm:gap-6 grid-cols-1 sm:grid-cols-3">
                       {teamMembers.map((member, index) => (
-                        <div key={index} className="group relative flex flex-col items-center overflow-hidden rounded-xl sm:rounded-2xl border border-white/10 bg-white/5 p-4 sm:p-6 text-center shadow-[0_20px_45px_rgba(6,18,14,0.4)] transition hover:-translate-y-1 hover:border-[#8cc63f]/40">
-                          {member.image ? (
-                            <div className="relative mb-4 sm:mb-5 h-28 w-28 sm:h-32 sm:w-32 md:h-36 md:w-36 overflow-hidden rounded-full sm:rounded-none bg-transparent">
-                              <img src={member.image} alt={`${member.name} portrait`} className="h-full w-full object-cover object-center opacity-90 transition duration-200 group-hover:scale-[1.02] filter brightness-90 contrast-105" />
-                            </div>
-                          ) : (
-                            <div className="relative mb-4 sm:mb-5 h-28 w-28 sm:h-32 sm:w-32 md:h-36 md:w-36 overflow-hidden rounded-full sm:rounded-none bg-gradient-to-br from-[#8cc63f]/35 via-[#0f271f] to-[#1b75bb]/35">
-                              <div className="absolute inset-0 flex items-end justify-center pb-3 sm:pb-4 text-base sm:text-lg font-semibold text-white/90 uppercase tracking-[0.2em] sm:tracking-[0.3em]">
-                                {member.name.split(' ')[0]}
-                              </div>
-                            </div>
-                          )}
+                        <div key={index} className="group relative flex flex-col items-center overflow-hidden rounded-xl sm:rounded-2xl border border-white/10 bg-white/5 p-4 sm:p-6 text-center shadow-lg hover:-translate-y-1 hover:border-[#8cc63f]/40">
+                          <div className="relative mb-4 sm:mb-5 h-28 w-28 sm:h-32 sm:w-32 md:h-36 md:w-36 overflow-hidden rounded-full sm:rounded-none bg-transparent">
+                            <img src={member.image} alt={`${member.name} portrait`} className="h-full w-full object-cover object-center opacity-90 group-hover:scale-[1.02]" />
+                          </div>
                           <h3 className="text-base sm:text-lg font-semibold text-white">{member.name}</h3>
                           <p className="mt-1 sm:mt-2 text-xs sm:text-sm text-gray-300">{member.role}</p>
                         </div>
@@ -1113,7 +1227,7 @@
               </section>
             </main>
 
-            {/* MODALS */}
+            {/* Modals */}
             {authMode && (
               <AuthModal
                 mode={authMode}
@@ -1142,7 +1256,7 @@
             )}
 
             <footer className="w-full px-4 sm:px-6 pb-8 sm:pb-12 text-center text-xs sm:text-sm text-white/40">
-              <p>&copy; {new Date().getFullYear()} Healthy Luxembourg &mdash; All rights reserved.</p>
+              <p>&copy; {new Date().getFullYear()} Healthy Luxembourg — All rights reserved.</p>
             </footer>
           </div>
         );
