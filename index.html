@@ -765,6 +765,16 @@
         
         const languages = Object.keys(translations);
 
+        useEffect(() => {
+    const checkSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        setUser(null);
+      }
+    };
+    checkSession();
+  }, []);
+
         useEffect(() => { 
           localStorage.setItem('hl-lang', language); 
         }, [language]);
@@ -1254,6 +1264,7 @@
     </script>
   </body>
 </html>
+
 
 
 
