@@ -976,21 +976,23 @@
           setAuthMode('login');
         };
 
-        const handleLogout = async () => {
+       const handleLogout = async () => {
   try {
-    // Sign out from Supabase
     const { error } = await supabase.auth.signOut();
     if (error) throw error;
     
-    // Clear user state
+    // Clear all state
     setUser(null);
     
-    // Redirect to home page
+    // Clear any custom storage items
+    localStorage.removeItem('hl-lang'); // Keep if you want
+    
+    // Redirect to home
     window.location.href = '/';
     
   } catch (error) {
     console.error('Logout error:', error);
-    // Still clear user state even if error
+    // Even on error, clear local state
     setUser(null);
     window.location.href = '/';
   }
@@ -1252,6 +1254,7 @@
     </script>
   </body>
 </html>
+
 
 
 
