@@ -645,15 +645,15 @@
           }
         }, [user]);
 
-        const handlePaymentClick = () => {
-          // Save user email before redirecting to Stripe
-          localStorage.setItem('stripe-pending-user', JSON.stringify({
-            id: user.id,
-            email: user.email
-          }));
-          // Open Stripe payment link in same window
-          window.location.href = `${STRIPE_PAYMENT_LINK}?prefilled_email=${encodeURIComponent(user.email)}&client_reference_id=${encodeURIComponent(user.id)}`;
-        };
+       const handlePaymentClick = () => {
+  // Save user email before redirecting to Stripe
+  localStorage.setItem('stripe-pending-user', JSON.stringify({
+    id: user.id,
+    email: user.email
+  }));
+  // Open Stripe payment link in same window - FIXED!
+  window.location.href = `${STRIPE_PAYMENT_LINK}?prefilled_email=${encodeURIComponent(user.email)}&client_reference_id=${encodeURIComponent(user.id)}`;
+};
 
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -1264,6 +1264,7 @@
     </script>
   </body>
 </html>
+
 
 
 
