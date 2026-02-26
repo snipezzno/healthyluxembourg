@@ -3,13 +3,11 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
-    <title>Healthy Luxembourg · Stripe Integration</title>
+    <title>Healthy Luxembourg</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
-    <!-- Stripe JS -->
-    <script src="https://js.stripe.com/v3/"></script>
     <style>
       html, body { font-family: Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, "Helvetica Neue", Arial, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol"; }
       .container-max { max-width: 80rem; width: 100%; margin-left: auto; margin-right: auto; }
@@ -42,20 +40,6 @@
       }
       .glow-green { box-shadow: 0 0 18px 2px rgba(140,198,63,0.3); }
       .glow-red { box-shadow: 0 0 18px 2px rgba(239,68,68,0.25); }
-      /* Stripe Elements styling */
-      .StripeElement {
-        background-color: rgba(0, 0, 0, 0.3);
-        border: 1px solid rgba(255, 255, 255, 0.2);
-        border-radius: 0.5rem;
-        padding: 0.75rem;
-        color: white;
-      }
-      .StripeElement--focus {
-        border-color: #8cc63f;
-      }
-      .StripeElement--invalid {
-        border-color: #ef4444;
-      }
     </style>
     <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
   </head>
@@ -136,7 +120,7 @@
         }
       }
 
-      // Save membership status
+      // Save membership status after successful payment
       function saveMembership(email) {
         try {
           const members = JSON.parse(localStorage.getItem('hl-members') || '{}');
@@ -146,9 +130,8 @@
           };
           localStorage.setItem('hl-members', JSON.stringify(members));
           
-          // Initialize savings
-          const mockSavings = Math.floor(Math.random() * 45) + 24;
-          localStorage.setItem(`hl-savings-${email}`, mockSavings.toString());
+          // Set initial savings (you can track actual savings from webhook later)
+          localStorage.setItem(`hl-savings-${email}`, '0');
           
           return true;
         } catch (error) {
@@ -335,133 +318,7 @@
 
       const HERO_IMAGE_SRC = 'https://i.imgur.com/eKs0Yrj.png';
       const AUTH_KEY = 'hl-authenticated';
-
-      // ==================== STRIPE PAYMENT MODAL ====================
-      function StripePaymentModal({ user, onClose, onSuccess }) {
-        const [loading, setLoading] = useState(false);
-        const [error, setError] = useState('');
-        const [cardElement, setCardElement] = useState(null);
-        
-        // Initialize Stripe
-        const stripe = window.Stripe('pk_test_YOUR_PUBLISHABLE_KEY'); // REPLACE WITH YOUR PUBLISHABLE KEY
-
-        const handleSubmit = async (e) => {
-          e.preventDefault();
-          setLoading(true);
-          setError('');
-
-          try {
-            // 1. Create payment intent on your backend
-            const response = await fetch('http://localhost:4242/create-payment-intent', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ 
-                userEmail: user.email,
-                amount: 999 // €9.99 in cents
-              })
-            });
-
-            const data = await response.json();
-            
-            if (!response.ok) {
-              throw new Error(data.error || 'Payment failed');
-            }
-
-            // 2. Confirm the payment with Stripe
-            const { error: stripeError, paymentIntent } = await stripe.confirmCardPayment(data.clientSecret, {
-              payment_method: {
-                card: cardElement,
-                billing_details: {
-                  email: user.email,
-                  name: user.name
-                }
-              }
-            });
-
-            if (stripeError) {
-              throw new Error(stripeError.message);
-            }
-
-            if (paymentIntent.status === 'succeeded') {
-              // Payment successful - activate membership
-              if (saveMembership(user.email)) {
-                onSuccess();
-                onClose();
-              } else {
-                throw new Error('Failed to activate membership');
-              }
-            }
-
-          } catch (err) {
-            setError(err.message);
-          } finally {
-            setLoading(false);
-          }
-        };
-
-        return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <div className="absolute inset-0 bg-black/70" onClick={onClose}></div>
-            <div className="relative z-10 w-full max-w-md rounded-2xl border border-white/10 bg-neutral-900/95 p-6 shadow-xl modal-enter">
-              <div className="flex items-start justify-between mb-4">
-                <h2 className="text-xl font-semibold text-white">Complete Payment</h2>
-                <button onClick={onClose} className="text-gray-400 hover:text-gray-200 text-2xl p-2 -m-2">&times;</button>
-              </div>
-
-              <div className="mb-4 p-4 bg-white/5 rounded-lg">
-                <p className="text-sm text-gray-300">Membership: €9.99/month</p>
-                <p className="text-xs text-gray-400">Cancel anytime</p>
-              </div>
-
-              <form onSubmit={handleSubmit}>
-                <div className="mb-4">
-                  <label className="text-sm uppercase tracking-wide text-gray-400 mb-2 block">Card Details</label>
-                  <div 
-                    ref={(el) => {
-                      if (el && !cardElement) {
-                        const elements = stripe.elements();
-                        const card = elements.create('card', {
-                          style: {
-                            base: {
-                              color: '#fff',
-                              fontFamily: 'Inter, sans-serif',
-                              fontSize: '16px',
-                              '::placeholder': {
-                                color: '#9ca3af'
-                              }
-                            }
-                          }
-                        });
-                        card.mount(el);
-                        setCardElement(card);
-                      }
-                    }}
-                    className="StripeElement"
-                  />
-                </div>
-
-                {error && (
-                  <div className="mb-4 p-3 bg-red-500/20 border border-red-500/50 rounded-lg text-red-400 text-sm">
-                    {error}
-                  </div>
-                )}
-
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="w-full rounded-lg bg-gradient-to-r from-[#8cc63f] to-[#1b75bb] px-4 py-3 font-semibold text-[#04120c] disabled:opacity-50"
-                >
-                  {loading ? 'Processing...' : 'Pay €9.99'}
-                </button>
-
-                <p className="text-xs text-gray-400 text-center mt-4">
-                  🔒 Secure payment powered by Stripe
-                </p>
-              </form>
-            </div>
-          </div>
-        );
-      }
+      const STRIPE_PAYMENT_LINK = 'https://buy.stripe.com/aFa8wR54V5Q4dxU5V99Ve00'; // Your payment link
 
       // ==================== MODAL COMPONENTS ====================
 
@@ -740,82 +597,85 @@
         );
       }
 
-      // Dashboard Modal (updated with Stripe)
+      // Dashboard Modal with Stripe Payment Link
       function DashboardModal({ user, onClose }) {
         const [member, setMember] = useState(false);
         const [savings, setSavings] = useState(0);
-        const [showPayment, setShowPayment] = useState(false);
         
         useEffect(() => {
           if (!user) return;
+          
+          // Check if we just returned from successful payment
+          const urlParams = new URLSearchParams(window.location.search);
+          const paymentSuccess = urlParams.get('payment') === 'success';
+          
+          if (paymentSuccess) {
+            // Save membership
+            saveMembership(user.email);
+            // Clean URL
+            window.history.replaceState({}, document.title, window.location.pathname);
+          }
+          
           setMember(checkMembership(user.email));
           const saved = localStorage.getItem(`hl-savings-${user.email}`);
           setSavings(saved ? parseInt(saved, 10) : 0);
         }, [user]);
 
-        const handlePaymentSuccess = () => {
-          setMember(true);
-          // Show success message or update UI
+        const handlePaymentClick = () => {
+          // Save user email before redirecting to Stripe
+          localStorage.setItem('stripe-pending-user', user.email);
+          // Open Stripe payment link in same window
+          window.location.href = `${STRIPE_PAYMENT_LINK}?prefilled_email=${encodeURIComponent(user.email)}&client_reference_id=${encodeURIComponent(user.email)}`;
         };
 
         return (
-          <>
-            <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-              <div className="absolute inset-0 bg-black/70" onClick={onClose}></div>
-              <div className="relative z-10 w-full max-w-md rounded-2xl border border-white/10 bg-neutral-900/95 p-6 shadow-xl modal-enter">
-                <div className="flex items-start justify-between mb-4">
-                  <h2 className="text-xl font-semibold text-white">My dashboard</h2>
-                  <button onClick={onClose} className="text-gray-400 hover:text-gray-200 text-2xl p-2 -m-2">&times;</button>
-                </div>
-                {user && (
-                  <div className="space-y-5">
-                    <div className="pb-3 border-b border-white/10">
-                      <p className="text-sm text-gray-400">Welcome back,</p>
-                      <p className="text-xl font-medium text-white">{user.name}</p>
-                      <p className="text-xs text-gray-500">{user.email}</p>
-                    </div>
-
-                    <div className={`flex items-center justify-between p-4 rounded-xl border ${member ? 'border-[#8cc63f]/30 glow-green' : 'border-red-500/30 glow-red'} bg-white/5`}>
-                      <div>
-                        <p className="text-sm text-gray-400">Membership</p>
-                        <p className="text-lg font-semibold flex items-center gap-2">
-                          {member ? 'Active' : 'Inactive'}
-                          <span className={`inline-block h-3 w-3 rounded-full ${member ? 'bg-[#8cc63f] animate-pulse' : 'bg-red-500'}`}></span>
-                        </p>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-sm text-gray-400">Total saved</p>
-                        <p className="text-2xl font-bold text-[#8cc63f]">€ {savings}</p>
-                      </div>
-                    </div>
-
-                    {!member && (
-                      <button 
-                        onClick={() => setShowPayment(true)} 
-                        className="w-full rounded-lg bg-gradient-to-r from-[#8cc63f] to-[#1b75bb] px-4 py-3 font-semibold text-[#04120c]"
-                      >
-                        Join now – €9.99/month
-                      </button>
-                    )}
-
-                    {member && (
-                      <div className="p-3 bg-white/5 rounded-lg text-sm text-gray-300 border border-white/10">
-                        <span className="text-[#8cc63f] font-medium">✔ Member perk:</span> Show your QR code at any partner. (QR preview coming soon)
-                      </div>
-                    )}
-                  </div>
-                )}
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-black/70" onClick={onClose}></div>
+            <div className="relative z-10 w-full max-w-md rounded-2xl border border-white/10 bg-neutral-900/95 p-6 shadow-xl modal-enter">
+              <div className="flex items-start justify-between mb-4">
+                <h2 className="text-xl font-semibold text-white">My dashboard</h2>
+                <button onClick={onClose} className="text-gray-400 hover:text-gray-200 text-2xl p-2 -m-2">&times;</button>
               </div>
-            </div>
+              {user && (
+                <div className="space-y-5">
+                  <div className="pb-3 border-b border-white/10">
+                    <p className="text-sm text-gray-400">Welcome back,</p>
+                    <p className="text-xl font-medium text-white">{user.name}</p>
+                    <p className="text-xs text-gray-500">{user.email}</p>
+                  </div>
 
-            {showPayment && (
-              <StripePaymentModal 
-                user={user} 
-                onClose={() => setShowPayment(false)}
-                onSuccess={handlePaymentSuccess}
-              />
-            )}
-          </>
+                  <div className={`flex items-center justify-between p-4 rounded-xl border ${member ? 'border-[#8cc63f]/30 glow-green' : 'border-red-500/30 glow-red'} bg-white/5`}>
+                    <div>
+                      <p className="text-sm text-gray-400">Membership</p>
+                      <p className="text-lg font-semibold flex items-center gap-2">
+                        {member ? 'Active' : 'Inactive'}
+                        <span className={`inline-block h-3 w-3 rounded-full ${member ? 'bg-[#8cc63f] animate-pulse' : 'bg-red-500'}`}></span>
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm text-gray-400">Total saved</p>
+                      <p className="text-2xl font-bold text-[#8cc63f]">€ {savings}</p>
+                    </div>
+                  </div>
+
+                  {!member && (
+                    <button 
+                      onClick={handlePaymentClick}
+                      className="w-full rounded-lg bg-gradient-to-r from-[#8cc63f] to-[#1b75bb] px-4 py-3 font-semibold text-[#04120c] hover:opacity-90 transition"
+                    >
+                      Join now – €9.99/month
+                    </button>
+                  )}
+
+                  {member && (
+                    <div className="p-3 bg-white/5 rounded-lg text-sm text-gray-300 border border-white/10">
+                      <span className="text-[#8cc63f] font-medium">✔ Member perk:</span> Show your QR code at any partner. (QR preview coming soon)
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
         );
       }
 
@@ -879,6 +739,32 @@
         const languages = Object.keys(translations);
 
         useEffect(() => { localStorage.setItem('hl-lang', language); }, [language]);
+
+        // Check for payment return on app load
+        useEffect(() => {
+          const urlParams = new URLSearchParams(window.location.search);
+          const sessionId = urlParams.get('session_id');
+          const paymentSuccess = urlParams.get('payment') === 'success';
+          
+          if (paymentSuccess || sessionId) {
+            const pendingEmail = localStorage.getItem('stripe-pending-user');
+            if (pendingEmail) {
+              saveMembership(pendingEmail);
+              localStorage.removeItem('stripe-pending-user');
+              
+              // Refresh user if logged in
+              if (user && user.email === pendingEmail) {
+                setUser({...user}); // Trigger re-render
+              }
+              
+              // Open dashboard to show green status
+              setDashboardOpen(true);
+              
+              // Clean URL
+              window.history.replaceState({}, document.title, window.location.pathname);
+            }
+          }
+        }, []);
 
         const openAuthModal = (mode, successMsg = '') => {
           setAuthMode(mode);
@@ -1267,4 +1153,5 @@
     </script>
   </body>
 </html>
+
 
