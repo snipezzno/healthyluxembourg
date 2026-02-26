@@ -948,9 +948,24 @@
         };
 
         const handleLogout = async () => {
-          await supabase.auth.signOut();
-          setUser(null);
-        };
+  try {
+    // Sign out from Supabase
+    const { error } = await supabase.auth.signOut();
+    if (error) throw error;
+    
+    // Clear user state
+    setUser(null);
+    
+    // Redirect to home page
+    window.location.href = '/';
+    
+  } catch (error) {
+    console.error('Logout error:', error);
+    // Still clear user state even if error
+    setUser(null);
+    window.location.href = '/';
+  }
+};
 
         const t = translations[language] || translations.en;
 
@@ -1208,6 +1223,7 @@
     </script>
   </body>
 </html>
+
 
 
 
