@@ -41,6 +41,7 @@
       .glow-green { box-shadow: 0 0 18px 2px rgba(140,198,63,0.3); }
       .glow-red { box-shadow: 0 0 18px 2px rgba(239,68,68,0.25); }
     </style>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
   </head>
   <body class="min-h-screen bg-[#07130f] text-gray-100 antialiased">
@@ -83,56 +84,64 @@
     <script type="text/babel">
       const { useState, useEffect } = React;
 
-      // ==================== HELPER FUNCTIONS ====================
-      function getAllUsers() {
-        try {
-          const raw = localStorage.getItem('hl-users');
-          return raw ? JSON.parse(raw) : [];
-        } catch (error) {
-          console.warn('Failed to parse stored users', error);
-          return [];
-        }
-      }
+      // ==================== SUPABASE SETUP ====================
+      // REPLACE THESE WITH YOUR ACTUAL SUPABASE URL AND ANON KEY
+      const SUPABASE_URL = 'YOUR_SUPABASE_URL'; // Replace with your URL
+      const SUPABASE_ANON_KEY = 'YOUR_ANON_KEY'; // Replace with your anon key
+      
+      const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-      function getStoredUser() {
+      // ==================== HELPER FUNCTIONS ====================
+      async function getStoredUser() {
         try {
-          const authed = localStorage.getItem('hl-authenticated') === 'true';
-          if (!authed) { return null; }
+          const { data: { user } } = await supabase.auth.getUser();
+          if (!user) return null;
           
-          const currentUserEmail = localStorage.getItem('hl-current-user-email');
-          if (!currentUserEmail) return null;
-          
-          const users = getAllUsers();
-          return users.find(u => u.email === currentUserEmail) || null;
+          // Get profile data from profiles table
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', user.id)
+            .single();
+            
+          return profile || user;
         } catch (error) {
-          console.warn('Failed to read stored authentication', error);
+          console.warn('Failed to get stored user', error);
           return null;
         }
       }
 
       // Check if user has active membership
-      function checkMembership(email) {
+      async function checkMembership(userId) {
         try {
-          const members = JSON.parse(localStorage.getItem('hl-members') || '{}');
-          return !!members[email];
+          const { data, error } = await supabase
+            .from('profiles')
+            .select('subscription_status')
+            .eq('id', userId)
+            .single();
+            
+          return data?.subscription_status === 'active';
         } catch {
           return false;
         }
       }
 
       // Save membership status after successful payment
-      function saveMembership(email) {
+      async function saveMembership(userId, email) {
         try {
-          const members = JSON.parse(localStorage.getItem('hl-members') || '{}');
-          members[email] = {
-            active: true,
-            since: new Date().toISOString()
-          };
-          localStorage.setItem('hl-members', JSON.stringify(members));
+          const { error } = await supabase
+            .from('profiles')
+            .update({ subscription_status: 'active' })
+            .eq('id', userId);
+            
+          if (error) throw error;
           
-          // Set initial savings (you can track actual savings from webhook later)
-          localStorage.setItem(`hl-savings-${email}`, '0');
-          
+          // Track savings
+          await supabase
+            .from('profiles')
+            .update({ total_savings: 0 })
+            .eq('id', userId);
+            
           return true;
         } catch (error) {
           console.error('Failed to save membership:', error);
@@ -317,8 +326,7 @@
       ];
 
       const HERO_IMAGE_SRC = 'https://i.imgur.com/eKs0Yrj.png';
-      const AUTH_KEY = 'hl-authenticated';
-      // YOUR UPDATED STRIPE PAYMENT LINK
+      // YOUR STRIPE PAYMENT LINK
       const STRIPE_PAYMENT_LINK = 'https://buy.stripe.com/eVq9AV68Z92galI4R59Ve01';
 
       // ==================== MODAL COMPONENTS ====================
@@ -577,7 +585,7 @@
 
                 <div className="grid gap-2">
                   <label className="text-sm uppercase tracking-wide text-gray-400">Password</label>
-                  <input name="password" type="password" required placeholder={isRegister ? 'min. 4 characters' : 'Your password'} value={form.password} onChange={handleChange} className="w-full rounded-lg border border-white/20 bg-black/30 px-4 py-2.5 text-gray-100 focus:border-[#8cc63f]" />
+                  <input name="password" type="password" required placeholder={isRegister ? 'min. 6 characters' : 'Your password'} value={form.password} onChange={handleChange} className="w-full rounded-lg border border-white/20 bg-black/30 px-4 py-2.5 text-gray-100 focus:border-[#8cc63f]" />
                 </div>
 
                 {error && <p className="text-sm text-red-400">{error}</p>}
@@ -606,27 +614,45 @@
         useEffect(() => {
           if (!user) return;
           
+          const checkStatus = async () => {
+            // Check membership status
+            const isMember = await checkMembership(user.id);
+            setMember(isMember);
+            
+            // Get savings from profile
+            const { data } = await supabase
+              .from('profiles')
+              .select('total_savings')
+              .eq('id', user.id)
+              .single();
+              
+            setSavings(data?.total_savings || 0);
+          };
+          
+          checkStatus();
+          
           // Check if we just returned from successful payment
           const urlParams = new URLSearchParams(window.location.search);
           const paymentSuccess = urlParams.get('payment') === 'success';
+          const sessionId = urlParams.get('session_id');
           
-          if (paymentSuccess) {
-            // Save membership
-            saveMembership(user.email);
+          if (paymentSuccess || sessionId) {
+            saveMembership(user.id, user.email).then(() => {
+              setMember(true);
+            });
             // Clean URL
             window.history.replaceState({}, document.title, window.location.pathname);
           }
-          
-          setMember(checkMembership(user.email));
-          const saved = localStorage.getItem(`hl-savings-${user.email}`);
-          setSavings(saved ? parseInt(saved, 10) : 0);
         }, [user]);
 
         const handlePaymentClick = () => {
           // Save user email before redirecting to Stripe
-          localStorage.setItem('stripe-pending-user', user.email);
+          localStorage.setItem('stripe-pending-user', JSON.stringify({
+            id: user.id,
+            email: user.email
+          }));
           // Open Stripe payment link in same window
-          window.location.href = `${STRIPE_PAYMENT_LINK}?prefilled_email=${encodeURIComponent(user.email)}&client_reference_id=${encodeURIComponent(user.email)}`;
+          window.location.href = `${STRIPE_PAYMENT_LINK}?prefilled_email=${encodeURIComponent(user.email)}&client_reference_id=${encodeURIComponent(user.id)}`;
         };
 
         return (
@@ -641,7 +667,7 @@
                 <div className="space-y-5">
                   <div className="pb-3 border-b border-white/10">
                     <p className="text-sm text-gray-400">Welcome back,</p>
-                    <p className="text-xl font-medium text-white">{user.name}</p>
+                    <p className="text-xl font-medium text-white">{user.name || user.email}</p>
                     <p className="text-xs text-gray-500">{user.email}</p>
                   </div>
 
@@ -727,7 +753,7 @@
       // ==================== MAIN APP ====================
       function App() {
         const [language, setLanguage] = useState(() => localStorage.getItem('hl-lang') || 'en');
-        const [user, setUser] = useState(getStoredUser);
+        const [user, setUser] = useState(null);
         const [authMode, setAuthMode] = useState(null);
         const [authError, setAuthError] = useState('');
         const [authSuccess, setAuthSuccess] = useState('');
@@ -739,32 +765,50 @@
         
         const languages = Object.keys(translations);
 
-        useEffect(() => { localStorage.setItem('hl-lang', language); }, [language]);
+        useEffect(() => { 
+          localStorage.setItem('hl-lang', language); 
+        }, [language]);
 
-        // Check for payment return on app load
+        // Check for logged in user on app load
         useEffect(() => {
-          const urlParams = new URLSearchParams(window.location.search);
-          const sessionId = urlParams.get('session_id');
-          const paymentSuccess = urlParams.get('payment') === 'success';
-          
-          if (paymentSuccess || sessionId) {
-            const pendingEmail = localStorage.getItem('stripe-pending-user');
-            if (pendingEmail) {
-              saveMembership(pendingEmail);
-              localStorage.removeItem('stripe-pending-user');
-              
-              // Refresh user if logged in
-              if (user && user.email === pendingEmail) {
-                setUser({...user}); // Trigger re-render
-              }
-              
-              // Open dashboard to show green status
-              setDashboardOpen(true);
-              
-              // Clean URL
-              window.history.replaceState({}, document.title, window.location.pathname);
+          const checkUser = async () => {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (user) {
+              // Get profile data
+              const { data: profile } = await supabase
+                .from('profiles')
+                .select('*')
+                .eq('id', user.id)
+                .single();
+                
+              setUser(profile || { ...user, name: user.email?.split('@')[0] });
             }
-          }
+          };
+          checkUser();
+        }, []);
+
+        // Listen for auth changes
+        useEffect(() => {
+          const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+            if (event === 'SIGNED_IN' && session?.user) {
+              // Get or create profile
+              const { data: profile } = await supabase
+                .from('profiles')
+                .select('*')
+                .eq('id', session.user.id)
+                .single();
+                
+              setUser(profile || { 
+                id: session.user.id, 
+                email: session.user.email,
+                name: session.user.email?.split('@')[0]
+              });
+            } else if (event === 'SIGNED_OUT') {
+              setUser(null);
+            }
+          });
+
+          return () => subscription.unsubscribe();
         }, []);
 
         const openAuthModal = (mode, successMsg = '') => {
@@ -832,8 +876,6 @@
           setAuthError('');
           setAuthSuccess('');
           
-          let existingUsers = getAllUsers();
-          
           const email = (formData.email || '').trim().toLowerCase();
           const password = (formData.password || '').trim();
 
@@ -843,17 +885,16 @@
           }
 
           if (mode === 'login') {
-            const foundUser = existingUsers.find(u => u.email === email && u.password === password);
+            const { data, error } = await supabase.auth.signInWithPassword({
+              email,
+              password
+            });
             
-            if (!foundUser) {
-              setAuthError('Incorrect email or password.');
+            if (error) {
+              setAuthError(error.message);
               return;
             }
             
-            localStorage.setItem('hl-current-user-email', foundUser.email);
-            localStorage.setItem(AUTH_KEY, 'true');
-            
-            setUser(foundUser);
             closeAuthModal();
             return;
           }
@@ -864,38 +905,51 @@
             return;
           }
 
-          if (password.length < 4) {
-            setAuthError('Password must be at least 4 characters long.');
+          if (password.length < 6) {
+            setAuthError('Password must be at least 6 characters long.');
             return;
           }
 
-          const emailExists = existingUsers.some(u => u.email === email);
-          
-          if (emailExists) {
-            setAuthError('This email is already registered. Please log in instead.');
-            return;
-          }
-
-          const newUser = {
-            name: formData.name.trim(),
+          // Sign up with Supabase
+          const { data, error } = await supabase.auth.signUp({
             email,
             password,
-            createdAt: new Date().toISOString()
-          };
+            options: {
+              data: {
+                name: formData.name.trim()
+              }
+            }
+          });
           
-          existingUsers.push(newUser);
-          localStorage.setItem('hl-users', JSON.stringify(existingUsers));
+          if (error) {
+            setAuthError(error.message);
+            return;
+          }
+
+          // Create profile record
+          if (data.user) {
+            await supabase
+              .from('profiles')
+              .insert([
+                { 
+                  id: data.user.id,
+                  email,
+                  name: formData.name.trim(),
+                  subscription_status: 'inactive',
+                  total_savings: 0
+                }
+              ]);
+          }
           
-          await sendWelcomeEmail(newUser.name, newUser.email);
+          await sendWelcomeEmail(formData.name.trim(), email);
           
-          setAuthSuccess('Account created successfully! Please check your email for a welcome message and then log in with your credentials.');
+          setAuthSuccess('Account created successfully! Please check your email for verification and then log in.');
           setAuthMode('login');
         };
 
-        const handleLogout = () => {
+        const handleLogout = async () => {
+          await supabase.auth.signOut();
           setUser(null);
-          localStorage.removeItem('hl-current-user-email');
-          localStorage.setItem(AUTH_KEY, 'false');
         };
 
         const t = translations[language] || translations.en;
@@ -956,7 +1010,7 @@
                     {user ? (
                       <>
                         <button onClick={() => setDashboardOpen(true)} className="rounded-full border border-[#8cc63f]/60 bg-[#8cc63f]/10 px-3 py-1.5 text-xs font-medium text-[#8cc63f] hover:bg-[#8cc63f]/20 whitespace-nowrap">
-                          {t.account}: {user.name.split(' ')[0]}
+                          {t.account}: {user.name?.split(' ')[0] || user.email?.split('@')[0]}
                         </button>
                         <button onClick={handleLogout} className="rounded-full border border-white/20 bg-transparent px-3 py-1.5 text-xs font-medium text-white/70 hover:border-white/40 hover:text-white whitespace-nowrap">
                           {t.logout}
@@ -1154,6 +1208,7 @@
     </script>
   </body>
 </html>
+
 
 
 
