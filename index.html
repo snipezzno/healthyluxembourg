@@ -789,27 +789,56 @@
 
         // Listen for auth changes
         useEffect(() => {
-          const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-            if (event === 'SIGNED_IN' && session?.user) {
-              // Get or create profile
-              const { data: profile } = await supabase
-                .from('profiles')
-                .select('*')
-                .eq('id', session.user.id)
-                .single();
-                
-              setUser(profile || { 
-                id: session.user.id, 
-                email: session.user.email,
-                name: session.user.email?.split('@')[0]
-              });
-            } else if (event === 'SIGNED_OUT') {
-              setUser(null);
-            }
-          });
+  // Check current session on load
+  const initializeAuth = async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session?.user) {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', session.user.id)
+        .single();
+        
+      setUser(profile || { 
+        id: session.user.id, 
+        email: session.user.email,
+        name: session.user.email?.split('@')[0]
+      });
+    }
+  };
+  
+  initializeAuth();
 
-          return () => subscription.unsubscribe();
-        }, []);
+  // Listen for auth changes
+  const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+    console.log('Auth event:', event); // Debug log
+    
+    if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+      if (session?.user) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', session.user.id)
+          .single();
+          
+        setUser(profile || { 
+          id: session.user.id, 
+          email: session.user.email,
+          name: session.user.email?.split('@')[0]
+        });
+      }
+    } else if (event === 'SIGNED_OUT') {
+      console.log('User signed out, clearing state');
+      setUser(null);
+      // Force clear any leftover state
+      localStorage.removeItem('hl-lang'); // Keep if you want
+    } else if (event === 'USER_DELETED') {
+      setUser(null);
+    }
+  });
+
+  return () => subscription.unsubscribe();
+}, []);
 
         const openAuthModal = (mode, successMsg = '') => {
           setAuthMode(mode);
@@ -1223,6 +1252,7 @@
     </script>
   </body>
 </html>
+
 
 
 
