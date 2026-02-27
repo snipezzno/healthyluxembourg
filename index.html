@@ -85,9 +85,8 @@
       const { useState, useEffect } = React;
 
       // ==================== SUPABASE SETUP ====================
-      // REPLACE THESE WITH YOUR ACTUAL SUPABASE URL AND ANON KEY
-      const SUPABASE_URL = 'https://mzpzpqjxpulgljgiluaa.supabase.co'; // Replace with your URL
-      const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im16cHpwcWp4cHVsZ2xqZ2lsdWFhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIxMzQ0NTAsImV4cCI6MjA4NzcxMDQ1MH0.Ap_eQoS-FvoQzTIzkkfDXWptqesgtKSMwbTGXgN4C1M'; // Replace with your anon key
+      const SUPABASE_URL = 'https://mzpzpqjxpulgljgiluaa.supabase.co';
+      const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im16cHpwcWp4cHVsZ2xqZ2lsdWFhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIxMzQ0NTAsImV4cCI6MjA4NzcxMDQ1MH0.Ap_eQoS-FvoQzTIzkkfDXWptqesgtKSMwbTGXgN4C1M';
       
       const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
@@ -97,7 +96,6 @@
           const { data: { user } } = await supabase.auth.getUser();
           if (!user) return null;
           
-          // Get profile data from profiles table
           const { data: profile } = await supabase
             .from('profiles')
             .select('*')
@@ -111,7 +109,6 @@
         }
       }
 
-      // Check if user has active membership
       async function checkMembership(userId) {
         try {
           const { data, error } = await supabase
@@ -126,7 +123,6 @@
         }
       }
 
-      // Save membership status after successful payment
       async function saveMembership(userId, email) {
         try {
           const { error } = await supabase
@@ -136,7 +132,6 @@
             
           if (error) throw error;
           
-          // Track savings
           await supabase
             .from('profiles')
             .update({ total_savings: 0 })
@@ -326,12 +321,10 @@
       ];
 
       const HERO_IMAGE_SRC = 'https://i.imgur.com/eKs0Yrj.png';
-      // YOUR STRIPE PAYMENT LINK
       const STRIPE_PAYMENT_LINK = 'https://buy.stripe.com/test_aFa8wR54V5Q4dxU5V99Ve00';
 
       // ==================== MODAL COMPONENTS ====================
 
-      // Partners List Modal
       function PartnersListModal({ onClose }) {
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -357,7 +350,6 @@
         );
       }
 
-      // How It Works Modal
       function HowItWorksModal({ onClose }) {
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -413,7 +405,6 @@
         );
       }
 
-      // Contact Form Modal
       function ContactFormModal({ type, onClose }) {
         const [formData, setFormData] = useState({
           name: '',
@@ -534,7 +525,6 @@
         );
       }
 
-      // Auth Modal
       function AuthModal({ mode, onClose, onSubmit, onSwitchMode, error, successMessage }) {
         const isRegister = mode === 'register';
         const [form, setForm] = useState({ name: '', email: '', password: '' });
@@ -606,7 +596,6 @@
         );
       }
 
-      // Dashboard Modal with Stripe Payment Link
       function DashboardModal({ user, onClose }) {
         const [member, setMember] = useState(false);
         const [savings, setSavings] = useState(0);
@@ -615,11 +604,9 @@
           if (!user) return;
           
           const checkStatus = async () => {
-            // Check membership status
             const isMember = await checkMembership(user.id);
             setMember(isMember);
             
-            // Get savings from profile
             const { data } = await supabase
               .from('profiles')
               .select('total_savings')
@@ -631,7 +618,6 @@
           
           checkStatus();
           
-          // Check if we just returned from successful payment
           const urlParams = new URLSearchParams(window.location.search);
           const paymentSuccess = urlParams.get('payment') === 'success';
           const sessionId = urlParams.get('session_id');
@@ -639,21 +625,21 @@
           if (paymentSuccess || sessionId) {
             saveMembership(user.id, user.email).then(() => {
               setMember(true);
+              setTimeout(() => {
+                window.location.reload();
+              }, 500);
             });
-            // Clean URL
             window.history.replaceState({}, document.title, window.location.pathname);
           }
         }, [user]);
 
-       const handlePaymentClick = () => {
-  // Save user email before redirecting to Stripe
-  localStorage.setItem('stripe-pending-user', JSON.stringify({
-    id: user.id,
-    email: user.email
-  }));
-  // Open Stripe payment link in same window - FIXED!
-  window.location.href = `${STRIPE_PAYMENT_LINK}?prefilled_email=${encodeURIComponent(user.email)}&client_reference_id=${encodeURIComponent(user.id)}`;
-};
+        const handlePaymentClick = () => {
+          localStorage.setItem('stripe-pending-user', JSON.stringify({
+            id: user.id,
+            email: user.email
+          }));
+          window.location.href = `${STRIPE_PAYMENT_LINK}?prefilled_email=${encodeURIComponent(user.email)}&client_reference_id=${encodeURIComponent(user.id)}`;
+        };
 
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -706,7 +692,6 @@
         );
       }
 
-      // Dropdown component
       function Dropdown({ label, items = [] }) {
         const [open, setOpen] = useState(false);
         useEffect(() => {
@@ -766,89 +751,67 @@
         const languages = Object.keys(translations);
 
         useEffect(() => {
-    const checkSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        setUser(null);
-      }
-    };
-    checkSession();
-  }, []);
+          const checkSession = async () => {
+            const { data: { session } } = await supabase.auth.getSession();
+            if (!session) {
+              setUser(null);
+            }
+          };
+          checkSession();
+        }, []);
 
         useEffect(() => { 
           localStorage.setItem('hl-lang', language); 
         }, [language]);
 
-        // Check for logged in user on app load
+        // Listen for auth changes
         useEffect(() => {
-          const checkUser = async () => {
-            const { data: { user } } = await supabase.auth.getUser();
-            if (user) {
-              // Get profile data
+          const initializeAuth = async () => {
+            const { data: { session } } = await supabase.auth.getSession();
+            if (session?.user) {
               const { data: profile } = await supabase
                 .from('profiles')
                 .select('*')
-                .eq('id', user.id)
+                .eq('id', session.user.id)
                 .single();
                 
-              setUser(profile || { ...user, name: user.email?.split('@')[0] });
+              setUser(profile || { 
+                id: session.user.id, 
+                email: session.user.email,
+                name: session.user.email?.split('@')[0]
+              });
             }
           };
-          checkUser();
-        }, []);
-
-        // Listen for auth changes
-        useEffect(() => {
-  // Check current session on load
-  const initializeAuth = async () => {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (session?.user) {
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', session.user.id)
-        .single();
-        
-      setUser(profile || { 
-        id: session.user.id, 
-        email: session.user.email,
-        name: session.user.email?.split('@')[0]
-      });
-    }
-  };
-  
-  initializeAuth();
-
-  // Listen for auth changes
-  const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-    console.log('Auth event:', event); // Debug log
-    
-    if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
-      if (session?.user) {
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', session.user.id)
-          .single();
           
-        setUser(profile || { 
-          id: session.user.id, 
-          email: session.user.email,
-          name: session.user.email?.split('@')[0]
-        });
-      }
-    } else if (event === 'SIGNED_OUT') {
-      console.log('User signed out, clearing state');
-      setUser(null);
-      // Force clear any leftover state
-      localStorage.removeItem('hl-lang'); // Keep if you want
-    } else if (event === 'USER_DELETED') {
-      setUser(null);
-    }
-  });
+          initializeAuth();
 
-  return () => subscription.unsubscribe();
-}, []);
+          const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+            console.log('Auth event:', event);
+            
+            if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+              if (session?.user) {
+                const { data: profile } = await supabase
+                  .from('profiles')
+                  .select('*')
+                  .eq('id', session.user.id)
+                  .single();
+                  
+                setUser(profile || { 
+                  id: session.user.id, 
+                  email: session.user.email,
+                  name: session.user.email?.split('@')[0]
+                });
+              }
+            } else if (event === 'SIGNED_OUT') {
+              console.log('User signed out, clearing state');
+              setUser(null);
+            } else if (event === 'USER_DELETED') {
+              setUser(null);
+            }
+          });
+
+          return () => subscription.unsubscribe();
+        }, []);
 
         const openAuthModal = (mode, successMsg = '') => {
           setAuthMode(mode);
@@ -938,7 +901,6 @@
             return;
           }
 
-          // REGISTER mode
           if ((formData.name || '').trim().length < 2) {
             setAuthError('Please enter your full name.');
             return;
@@ -949,7 +911,6 @@
             return;
           }
 
-          // Sign up with Supabase
           const { data, error } = await supabase.auth.signUp({
             email,
             password,
@@ -965,7 +926,6 @@
             return;
           }
 
-          // Create profile record
           if (data.user) {
             await supabase
               .from('profiles')
@@ -986,27 +946,21 @@
           setAuthMode('login');
         };
 
-       const handleLogout = async () => {
-  try {
-    const { error } = await supabase.auth.signOut();
-    if (error) throw error;
-    
-    // Clear all state
-    setUser(null);
-    
-    // Clear any custom storage items
-    localStorage.removeItem('hl-lang'); // Keep if you want
-    
-    // Redirect to home
-    window.location.href = '/';
-    
-  } catch (error) {
-    console.error('Logout error:', error);
-    // Even on error, clear local state
-    setUser(null);
-    window.location.href = '/';
-  }
-};
+        const handleLogout = async () => {
+          try {
+            const { error } = await supabase.auth.signOut();
+            if (error) throw error;
+            
+            setUser(null);
+            localStorage.removeItem('hl-lang');
+            window.location.href = '/';
+            
+          } catch (error) {
+            console.error('Logout error:', error);
+            setUser(null);
+            window.location.href = '/';
+          }
+        };
 
         const t = translations[language] || translations.en;
 
@@ -1027,7 +981,6 @@
                   </span>
                 </div>
 
-                {/* Desktop Navigation */}
                 <div className="hidden lg:flex items-center gap-4 xl:gap-8 text-sm text-white/70">
                   <Dropdown
                     label={t.nav.merchants}
@@ -1050,7 +1003,6 @@
                     }))}
                   />
                   
-                  {/* Mobile menu button */}
                   <button onClick={() => setMobileMenuOpen(!mobileMenuOpen)} className="lg:hidden p-2 text-white/70 hover:text-white">
                     <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       {mobileMenuOpen ? (
@@ -1061,7 +1013,6 @@
                     </svg>
                   </button>
 
-                  {/* Desktop auth buttons */}
                   <div className="hidden md:flex items-center gap-2">
                     {user ? (
                       <>
@@ -1086,7 +1037,6 @@
                 </div>
               </div>
 
-              {/* Mobile menu */}
               {mobileMenuOpen && (
                 <div className="lg:hidden border-t border-white/10 bg-[#0b1512]/95">
                   <div className="container-max mx-auto px-4 py-4 flex flex-col gap-2">
@@ -1101,7 +1051,6 @@
                     <button onClick={() => { openContactForm('contact'); setMobileMenuOpen(false); }} className="py-3 text-left text-white/70 hover:text-white">Contact</button>
                     <button onClick={() => { openHowItWorks(); setMobileMenuOpen(false); }} className="py-3 text-left text-white/70 hover:text-white">How it works</button>
                     
-                    {/* Mobile auth buttons */}
                     <div className="flex flex-col gap-2 pt-4 border-t border-white/10">
                       {user ? (
                         <>
@@ -1166,7 +1115,6 @@
                     </div>
                   </div>
 
-                  {/* Partners preview */}
                   <div className="mt-16 sm:mt-20 scroll-mt-32" id="partners">
                     <h2 className="text-center text-xs sm:text-sm font-semibold uppercase tracking-[0.25em] sm:tracking-[0.35em] text-[#8cc63f]">{t.partners}</h2>
                     <div className="mt-6 sm:mt-8 mx-auto grid max-w-4xl grid-cols-1 sm:grid-cols-2 justify-items-center gap-4 sm:gap-6">
@@ -1194,7 +1142,6 @@
                     </div>
                   </div>
 
-                  {/* Team section */}
                   <div className="mt-16 sm:mt-24 rounded-2xl sm:rounded-3xl border border-white/10 bg-[#0f1d19]/70 p-6 sm:p-8 md:p-12 shadow-lg" id="about-section">
                     <div className="flex flex-col gap-4 sm:gap-6 md:flex-row md:items-end md:justify-between">
                       <div>
@@ -1224,7 +1171,6 @@
               </section>
             </main>
 
-            {/* Modals */}
             {authMode && (
               <AuthModal
                 mode={authMode}
@@ -1264,15 +1210,3 @@
     </script>
   </body>
 </html>
-
-
-
-
-
-
-
-
-
-
-
-
