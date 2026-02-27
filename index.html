@@ -912,17 +912,17 @@
     return;
   }
 
-  // Sign up with Supabase - NO auto-confirm
-  const { data, error } = await supabase.auth.signUp({
-    email,
-    password,
-    options: {
-      data: {
-        name: formData.name.trim()
-      },
-      emailRedirectTo: 'https://www.healthyluxembourg.com/login'
-    }
-  });
+  // Sign up with Supabase
+const { data, error } = await supabase.auth.signUp({
+  email,
+  password,
+  options: {
+    data: {
+      name: formData.name.trim()
+    },
+    emailRedirectTo: 'https://www.healthyluxembourg.com/login'
+  }
+});
   
   if (error) {
     setAuthError(error.message);
@@ -1217,4 +1217,5 @@
     </script>
   </body>
 </html>
+
 
