@@ -764,6 +764,47 @@
           localStorage.setItem('hl-lang', language); 
         }, [language]);
 
+        // Handle email confirmation
+useEffect(() => {
+  const handleEmailConfirmation = async () => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const tokenHash = urlParams.get('token_hash');
+    const type = urlParams.get('type');
+    
+    if (tokenHash && type === 'signup') {
+      try {
+        const { error } = await supabase.auth.verifyOtp({
+          token_hash: tokenHash,
+          type: 'signup'
+        });
+        
+        if (error) {
+          console.error('Verification error:', error);
+          setAuthError('Email verification failed. Please try again or contact support.');
+        } else {
+          setAuthSuccess('Email verified successfully! You can now log in.');
+          setTimeout(() => {
+            window.location.href = '/';
+          }, 3000);
+        }
+      } catch (err) {
+        console.error('Verification error:', err);
+      }
+    }
+  };
+  
+  handleEmailConfirmation();
+}, []);
+// ===== END OF NEW CODE =====
+
+// Listen for auth changes
+useEffect(() => {
+  const initializeAuth = async () => {
+    // ... existing code ...
+  };
+  // ... rest of the auth listener ...
+}, []);
+
         // Listen for auth changes
         useEffect(() => {
           const initializeAuth = async () => {
@@ -1217,5 +1258,6 @@ const { data, error } = await supabase.auth.signUp({
     </script>
   </body>
 </html>
+
 
 
