@@ -773,16 +773,28 @@ useEffect(() => {
     const tokenHash = urlParams.get('token_hash');
     const type = urlParams.get('type');
     
-    if (tokenHash && type === 'signup') {
+    console.log('URL params:', { tokenHash, type }); // Debug log
+    
+    if (tokenHash) {
       try {
-        await supabase.auth.verifyOtp({
-          token_hash: tokenHash,
-          type: 'signup'
-        });
-        // Clear the URL parameters
-        window.history.replaceState({}, document.title, '/');
-        // Auto-open login modal
-        openAuthModal('login');
+        if (type === 'signup' || type === 'email') {
+          const { error } = await supabase.auth.verifyOtp({
+            token_hash: tokenHash,
+            type: 'signup'
+          });
+          
+          if (error) {
+            console.error('Verification error:', error);
+          } else {
+            console.log('Email verified successfully!');
+            // Clear URL parameters
+            window.history.replaceState({}, document.title, '/');
+            // Auto-open login modal
+            setTimeout(() => {
+              openAuthModal('login');
+            }, 500);
+          }
+        }
       } catch (err) {
         console.error('Verification error:', err);
         window.history.replaceState({}, document.title, '/');
@@ -950,7 +962,7 @@ const { data, error } = await supabase.auth.signUp({
     data: {
       name: formData.name.trim()
     },
-    emailRedirectTo: 'https://www.healthyluxembourg.com/login'
+    emailRedirectTo: 'https://www.healthyluxembourg.com'
   }
 });
   
@@ -1247,6 +1259,7 @@ const { data, error } = await supabase.auth.signUp({
     </script>
   </body>
 </html>
+
 
 
 
