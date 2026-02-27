@@ -875,76 +875,83 @@
         };
 
         const handleAuthSubmit = async (mode, formData) => {
-          setAuthError('');
-          setAuthSuccess('');
-          
-          const email = (formData.email || '').trim().toLowerCase();
-          const password = (formData.password || '').trim();
+  setAuthError('');
+  setAuthSuccess('');
+  
+  const email = (formData.email || '').trim().toLowerCase();
+  const password = (formData.password || '').trim();
 
-          if (!email || !password) {
-            setAuthError('Please enter your email and password.');
-            return;
-          }
+  if (!email || !password) {
+    setAuthError('Please enter your email and password.');
+    return;
+  }
 
-          if (mode === 'login') {
-            const { data, error } = await supabase.auth.signInWithPassword({
-              email,
-              password
-            });
-            
-            if (error) {
-              setAuthError(error.message);
-              return;
-            }
-            
-            closeAuthModal();
-            return;
-          }
+  if (mode === 'login') {
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password
+    });
+    
+    if (error) {
+      setAuthError(error.message);
+      return;
+    }
+    
+    closeAuthModal();
+    return;
+  }
 
-          if ((formData.name || '').trim().length < 2) {
-            setAuthError('Please enter your full name.');
-            return;
-          }
+  // REGISTER mode
+  if ((formData.name || '').trim().length < 2) {
+    setAuthError('Please enter your full name.');
+    return;
+  }
 
-          if (password.length < 6) {
-            setAuthError('Password must be at least 6 characters long.');
-            return;
-          }
+  if (password.length < 6) {
+    setAuthError('Password must be at least 6 characters long.');
+    return;
+  }
 
-          const { data, error } = await supabase.auth.signUp({
-            email,
-            password,
-            options: {
-              data: {
-                name: formData.name.trim()
-              }
-            }
-          });
-          
-          if (error) {
-            setAuthError(error.message);
-            return;
-          }
+  // Sign up with Supabase - NO auto-confirm
+  const { data, error } = await supabase.auth.signUp({
+    email,
+    password,
+    options: {
+      data: {
+        name: formData.name.trim()
+      },
+      emailRedirectTo: 'https://www.healthyluxembourg.com/login'
+    }
+  });
+  
+  if (error) {
+    setAuthError(error.message);
+    return;
+  }
 
-          if (data.user) {
-            await supabase
-              .from('profiles')
-              .insert([
-                { 
-                  id: data.user.id,
-                  email,
-                  name: formData.name.trim(),
-                  subscription_status: 'inactive',
-                  total_savings: 0
-                }
-              ]);
-          }
-          
-          await sendWelcomeEmail(formData.name.trim(), email);
-          
-          setAuthSuccess('Account created successfully! Please check your email for verification and then log in.');
-          setAuthMode('login');
-        };
+  // Create profile record
+  if (data.user) {
+    await supabase
+      .from('profiles')
+      .insert([
+        { 
+          id: data.user.id,
+          email,
+          name: formData.name.trim(),
+          subscription_status: 'inactive',
+          total_savings: 0
+        }
+      ]);
+  }
+  
+  await sendWelcomeEmail(formData.name.trim(), email);
+  
+  // Show success message and ask user to verify email
+  setAuthSuccess('Account created! Please check your email for a verification link. Then log in with your credentials.');
+  
+  // Switch to login mode
+  setAuthMode('login');
+};
 
         const handleLogout = async () => {
           try {
@@ -1210,3 +1217,4 @@
     </script>
   </body>
 </html>
+
